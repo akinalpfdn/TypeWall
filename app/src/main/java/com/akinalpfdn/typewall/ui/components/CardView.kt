@@ -41,9 +41,14 @@ fun CardView(
     scale: Float,
     viewModel: CanvasViewModel
 ) {
+    // FIX: State Hoisting for Gestures
+    // pointerInput lambdas capture the initial 'card' and 'scale' values and do not update
+    // when the composable recomposes. We use rememberUpdatedState to ensure the gestures
+    // always read the very latest data (position, width, scale) without restarting the gesture.
+    val currentCard by rememberUpdatedState(card)
+    val currentScale by rememberUpdatedState(scale)
+
     var isFocused by remember { mutableStateOf(false) }
-    // Fix: Track if the card has EVER gained focus.
-    // This prevents deleting a new card before it has a chance to focus.
     var hasGainedFocus by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
@@ -62,13 +67,14 @@ fun CardView(
             Log.d(TAG, "New empty card created id=${card.id}. Requesting focus.")
             focusRequester.requestFocus()
             delay(100)
-            Log.d(TAG, "Showing keyboard for new card id=${card.id}.")
             keyboardController?.show()
         }
     }
 
     Box(
         modifier = Modifier
+            // We use 'card' here for rendering because Composable functions re-run on change,
+            // so 'offset' and 'width' modifiers are naturally updated.
             .offset { IntOffset(card.x.roundToInt(), card.y.roundToInt()) }
             .width(card.width.dp)
             .shadow(shadowElevation, RoundedCornerShape(8.dp))
@@ -76,7 +82,6 @@ fun CardView(
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
             .pointerInput(Unit) {
                 detectTapGestures {
-                    Log.d(TAG, "Card tapped id=${card.id}. Requesting focus and keyboard.")
                     focusRequester.requestFocus()
                     keyboardController?.show()
                 }
@@ -84,15 +89,16 @@ fun CardView(
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
+                    // Use 'currentCard' and 'currentScale' to get latest values during drag
                     viewModel.updateCard(
-                        id = card.id,
-                        x = card.x + (dragAmount.x / scale),
-                        y = card.y + (dragAmount.y / scale)
+                        id = currentCard.id,
+                        x = currentCard.x + (dragAmount.x / currentScale),
+                        y = currentCard.y + (dragAmount.y / currentScale)
                     )
                 }
             }
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) { // Polished: Reduced padding from 16.dp
             BasicTextField(
                 value = card.content,
                 onValueChange = { viewModel.updateCard(id = card.id, content = it) },
@@ -107,20 +113,13 @@ fun CardView(
                     .onFocusChanged { focusState ->
                         isFocused = focusState.isFocused
 
-                        // Mark that we have successfully focused at least once
                         if (focusState.isFocused) {
                             hasGainedFocus = true
-                        }
-
-                        // Fix: Only cleanup if we lost focus AND we had focus previously.
-                        // This ignores the initial "false" state when the card is created.
-                        if (!focusState.isFocused && hasGainedFocus) {
-                            Log.d(TAG, "Lost focus and card was previously active. Cleaning up if empty.")
-                            viewModel.cleanupEmptyCard(card.id)
-                        }
-
-                        if (focusState.isFocused) {
                             keyboardController?.show()
+                        }
+
+                        if (!focusState.isFocused && hasGainedFocus) {
+                            viewModel.cleanupEmptyCard(card.id)
                         }
                     }
             )
@@ -145,18 +144,23 @@ fun CardView(
             }
         }
 
+        // Resizer Handle
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .fillMaxHeight()
+                // Polished: Use matchParentSize to fit content height exactly
+                // instead of fillMaxHeight which can sometimes force expansion.
+                .matchParentSize()
                 .width(20.dp)
                 .offset(x = 10.dp)
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
+                        // Use 'currentCard' to prevent width resetting
+                        val newWidth = currentCard.width + (dragAmount.x / currentScale)
                         viewModel.updateCard(
-                            id = card.id,
-                            width = card.width + (dragAmount.x / scale)
+                            id = currentCard.id,
+                            width = newWidth
                         )
                     }
                 }
