@@ -7,5 +7,15 @@ data class Card(
     var x: Float,
     var y: Float,
     var width: Float,
-    var content: String
+    var content: String,
+    // Store styling information for JSON serialization
+    var spans: List<CardSpan> = emptyList()
 )
+
+data class CardSpan(
+    val start: Int,
+    val end: Int,
+    val type: SpanType
+)
+
+enum class SpanType { BOLD, ITALIC, UNDERLINE }

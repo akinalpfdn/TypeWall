@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.akinalpfdn.typewall.model.Card
+import com.akinalpfdn.typewall.model.CardSpan
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
@@ -30,8 +31,6 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun addCard(x: Float, y: Float) {
-        Log.d(TAG, "addCard called at x=$x, y=$y")
-
         val canvasX = (x - offsetX) / scale - 100f
         val canvasY = (y - offsetY) / scale - 20f
 
@@ -39,19 +38,27 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
             x = canvasX,
             y = canvasY,
             width = 250f,
-            content = ""
+            content = "",
+            spans = emptyList()
         )
         _cards.add(newCard)
-        Log.d(TAG, "Card added to list. New size: ${_cards.size}")
         saveCards()
     }
 
-    fun updateCard(id: String, content: String? = null, x: Float? = null, y: Float? = null, width: Float? = null) {
+    fun updateCard(
+        id: String,
+        content: String? = null,
+        spans: List<CardSpan>? = null, // New parameter
+        x: Float? = null,
+        y: Float? = null,
+        width: Float? = null
+    ) {
         val index = _cards.indexOfFirst { it.id == id }
         if (index != -1) {
             val oldCard = _cards[index]
             _cards[index] = oldCard.copy(
                 content = content ?: oldCard.content,
+                spans = spans ?: oldCard.spans,
                 x = x ?: oldCard.x,
                 y = y ?: oldCard.y,
                 width = width?.coerceAtLeast(200f) ?: oldCard.width
@@ -61,7 +68,6 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun removeCard(id: String) {
-        Log.d(TAG, "Removing card $id")
         _cards.removeAll { it.id == id }
         saveCards()
     }
@@ -69,7 +75,6 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     fun cleanupEmptyCard(id: String) {
         val card = _cards.find { it.id == id }
         if (card != null && card.content.isBlank()) {
-            Log.d(TAG, "Cleaning up empty card $id")
             removeCard(id)
         }
     }
@@ -86,7 +91,6 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
                 val type = object : TypeToken<List<Card>>() {}.type
                 val savedCards: List<Card> = gson.fromJson(json, type)
                 _cards.addAll(savedCards)
-                Log.d(TAG, "Loaded ${savedCards.size} cards from storage")
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading cards", e)
             }
