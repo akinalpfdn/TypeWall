@@ -8,14 +8,18 @@ data class Card(
     var y: Float,
     var width: Float,
     var content: String,
-    // Store styling information for JSON serialization
-    var spans: List<CardSpan> = emptyList()
+    var spans: List<CardSpan> = emptyList(),
+    var cardColor: Long? = null // ARGB Long
 )
 
 data class CardSpan(
     val start: Int,
     val end: Int,
-    val type: SpanType
+    val type: SpanType,
+    val value: String? = null // Store Color Hex or Font Size
 )
 
-enum class SpanType { BOLD, ITALIC, UNDERLINE }
+enum class SpanType {
+    BOLD, ITALIC, UNDERLINE,
+    TEXT_COLOR, BG_COLOR, FONT_SIZE
+}

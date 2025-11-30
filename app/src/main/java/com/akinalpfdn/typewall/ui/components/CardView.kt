@@ -1,9 +1,7 @@
 package com.akinalpfdn.typewall.ui.components
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -11,13 +9,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FormatBold
-import androidx.compose.material.icons.filled.FormatItalic
-import androidx.compose.material.icons.filled.FormatUnderlined
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akinalpfdn.typewall.model.Card
@@ -47,8 +42,6 @@ import com.akinalpfdn.typewall.model.SpanType
 import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
-
-private const val TAG = "CardViewDebug"
 
 @Composable
 fun CardView(
@@ -62,8 +55,6 @@ fun CardView(
     var isFocused by remember { mutableStateOf(false) }
     var hasGainedFocus by remember { mutableStateOf(false) }
 
-    // Initialize TextFieldValue from Card content + spans
-    // We use a key on card.id to reset if card is recycled, but we need to be careful not to reset while typing
     var textFieldValue by remember(card.id) {
         mutableStateOf(
             TextFieldValue(
@@ -73,13 +64,27 @@ fun CardView(
         )
     }
 
-    // Sync external content changes (e.g. from undo/redo or initial load) ONLY if content doesn't match
-    // This prevents the cursor from jumping while typing if we were to just observe 'card' directly
     LaunchedEffect(card.content, card.spans) {
         if (textFieldValue.text != card.content) {
             textFieldValue = textFieldValue.copy(
                 annotatedString = buildAnnotatedStringFromCard(card)
             )
+        }
+    }
+
+    // Sync Active Styles
+    LaunchedEffect(textFieldValue.selection, textFieldValue.annotatedString) {
+        if (isFocused) {
+            viewModel.activeStyles.clear()
+            // Check basic toggles
+            if (hasStyle(textFieldValue, SpanType.BOLD)) viewModel.activeStyles[SpanType.BOLD] = null
+            if (hasStyle(textFieldValue, SpanType.ITALIC)) viewModel.activeStyles[SpanType.ITALIC] = null
+            if (hasStyle(textFieldValue, SpanType.UNDERLINE)) viewModel.activeStyles[SpanType.UNDERLINE] = null
+
+            // Check values (Color/Size)
+            getStyleValue(textFieldValue, SpanType.TEXT_COLOR)?.let { viewModel.activeStyles[SpanType.TEXT_COLOR] = it }
+            getStyleValue(textFieldValue, SpanType.BG_COLOR)?.let { viewModel.activeStyles[SpanType.BG_COLOR] = it }
+            getStyleValue(textFieldValue, SpanType.FONT_SIZE)?.let { viewModel.activeStyles[SpanType.FONT_SIZE] = it }
         }
     }
 
@@ -89,7 +94,10 @@ fun CardView(
     val isEmpty = card.content.isEmpty()
     val isGhost = isEmpty && !isFocused
 
-    val backgroundColor = if (isGhost) Color.Transparent else MaterialTheme.colorScheme.surface
+    // Card Background Color Logic
+    val cardBgColor = if (card.cardColor != null) Color(card.cardColor!!.toULong()) else MaterialTheme.colorScheme.surface
+    val displayBgColor = if (isGhost) Color.Transparent else cardBgColor
+
     val borderColor = if (isGhost) Color.Transparent else MaterialTheme.colorScheme.outlineVariant
     val shadowElevation = if (isGhost) 0.dp else if (isFocused) 8.dp else 2.dp
 
@@ -106,7 +114,7 @@ fun CardView(
             .offset { IntOffset(card.x.roundToInt(), card.y.roundToInt()) }
             .width(card.width.dp)
             .shadow(shadowElevation, RoundedCornerShape(8.dp))
-            .background(backgroundColor, RoundedCornerShape(8.dp))
+            .background(displayBgColor, RoundedCornerShape(8.dp))
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
             .pointerInput(Unit) {
                 detectTapGestures {
@@ -126,51 +134,6 @@ fun CardView(
             }
     ) {
         Column {
-            // Formatting Toolbar (Visible only when focused)
-            if (isFocused) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                    modifier = Modifier.fillMaxWidth().height(40.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    ) {
-                        FormatIconButton(
-                            icon = Icons.Default.FormatBold,
-                            isActive = hasStyle(textFieldValue, SpanType.BOLD),
-                            onClick = {
-                                textFieldValue = toggleStyle(textFieldValue, SpanType.BOLD)
-                                updateViewModel(viewModel, card.id, textFieldValue)
-                            }
-                        )
-                        FormatIconButton(
-                            icon = Icons.Default.FormatItalic,
-                            isActive = hasStyle(textFieldValue, SpanType.ITALIC),
-                            onClick = {
-                                textFieldValue = toggleStyle(textFieldValue, SpanType.ITALIC)
-                                updateViewModel(viewModel, card.id, textFieldValue)
-                            }
-                        )
-                        FormatIconButton(
-                            icon = Icons.Default.FormatUnderlined,
-                            isActive = hasStyle(textFieldValue, SpanType.UNDERLINE),
-                            onClick = {
-                                textFieldValue = toggleStyle(textFieldValue, SpanType.UNDERLINE)
-                                updateViewModel(viewModel, card.id, textFieldValue)
-                            }
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(onClick = { viewModel.removeCard(card.id) }) {
-                            Icon(Icons.Default.Delete, "Delete", tint = Color.Red.copy(alpha = 0.6f))
-                        }
-                    }
-                }
-            }
-
-            // Text Input
             Box(modifier = Modifier.padding(12.dp)) {
                 BasicTextField(
                     value = textFieldValue,
@@ -188,10 +151,31 @@ fun CardView(
                         .focusRequester(focusRequester)
                         .onFocusChanged { focusState ->
                             isFocused = focusState.isFocused
+
                             if (focusState.isFocused) {
                                 hasGainedFocus = true
                                 keyboardController?.show()
+
+                                // Setup Callbacks
+                                viewModel.onApplyStyle = { type, value ->
+                                    textFieldValue = applyStyle(textFieldValue, type, value)
+                                    updateViewModel(viewModel, card.id, textFieldValue)
+                                }
+                                viewModel.onInsertList = { prefix ->
+                                    textFieldValue = insertListPrefix(textFieldValue, prefix)
+                                    updateViewModel(viewModel, card.id, textFieldValue)
+                                }
+                                viewModel.onApplyCardColor = { color ->
+                                    viewModel.updateCard(id = card.id, cardColor = color)
+                                }
+                            } else {
+                                if (viewModel.onApplyStyle != null) {
+                                    viewModel.onApplyStyle = null
+                                    viewModel.onInsertList = null
+                                    viewModel.onApplyCardColor = null
+                                }
                             }
+
                             if (!focusState.isFocused && hasGainedFocus) {
                                 viewModel.cleanupEmptyCard(card.id)
                             }
@@ -200,7 +184,23 @@ fun CardView(
             }
         }
 
-        // Resizer Handle
+        if (isFocused) {
+            IconButton(
+                onClick = { viewModel.removeCard(card.id) },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(32.dp)
+                    .padding(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color.Red.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -218,39 +218,29 @@ fun CardView(
     }
 }
 
-// --- Helper Composable for Menu Buttons ---
-@Composable
-fun FormatIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isActive: Boolean,
-    onClick: () -> Unit
-) {
-    val tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val bg = if (isActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(32.dp)
-            .background(bg, RoundedCornerShape(4.dp))
-            .clickable { onClick() }
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-    }
-}
-
 // --- Rich Text Logic ---
 
 fun updateViewModel(viewModel: CanvasViewModel, cardId: String, value: TextFieldValue) {
-    // Convert Compose AnnotatedString spans back to our serializable CardSpan model
     val spans = value.annotatedString.spanStyles.flatMap { range ->
         val type = when {
             range.item.fontWeight == FontWeight.Bold -> SpanType.BOLD
             range.item.fontStyle == FontStyle.Italic -> SpanType.ITALIC
             range.item.textDecoration == TextDecoration.Underline -> SpanType.UNDERLINE
+            range.item.color != Color.Unspecified -> SpanType.TEXT_COLOR
+            range.item.background != Color.Unspecified -> SpanType.BG_COLOR
+            range.item.fontSize != TextUnit.Unspecified -> SpanType.FONT_SIZE
             else -> null
         }
-        if (type != null) listOf(CardSpan(range.start, range.end, type)) else emptyList()
+
+        // Extract value
+        val strValue = when(type) {
+            SpanType.TEXT_COLOR -> range.item.color.value.toString()
+            SpanType.BG_COLOR -> range.item.background.value.toString()
+            SpanType.FONT_SIZE -> range.item.fontSize.value.toString()
+            else -> null
+        }
+
+        if (type != null) listOf(CardSpan(range.start, range.end, type, strValue)) else emptyList()
     }
     viewModel.updateCard(id = cardId, content = value.text, spans = spans)
 }
@@ -259,15 +249,19 @@ fun buildAnnotatedStringFromCard(card: Card): AnnotatedString {
     return buildAnnotatedString {
         append(card.content)
         card.spans.forEach { span ->
-            val style = when (span.type) {
-                SpanType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
-                SpanType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
-                SpanType.UNDERLINE -> SpanStyle(textDecoration = TextDecoration.Underline)
-            }
-            // Ensure indices are valid to prevent crashes if content length changed
-            if (span.start <= card.content.length && span.end <= card.content.length) {
-                addStyle(style, span.start, span.end)
-            }
+            try {
+                val style = when (span.type) {
+                    SpanType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
+                    SpanType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
+                    SpanType.UNDERLINE -> SpanStyle(textDecoration = TextDecoration.Underline)
+                    SpanType.TEXT_COLOR -> SpanStyle(color = Color(span.value!!.toULong()))
+                    SpanType.BG_COLOR -> SpanStyle(background = Color(span.value!!.toULong()))
+                    SpanType.FONT_SIZE -> SpanStyle(fontSize = span.value!!.toFloat().sp)
+                }
+                if (span.start <= card.content.length && span.end <= card.content.length) {
+                    addStyle(style, span.start, span.end)
+                }
+            } catch (e: Exception) { /* Ignore invalid spans */ }
         }
     }
 }
@@ -275,46 +269,65 @@ fun buildAnnotatedStringFromCard(card: Card): AnnotatedString {
 fun hasStyle(value: TextFieldValue, type: SpanType): Boolean {
     val selection = value.selection
     if (selection.collapsed) return false
-
-    // Check if the selection range contains the specific style
     return value.annotatedString.spanStyles.any {
-        val spanStart = it.start
-        val spanEnd = it.end
-        // Overlap check
-        val overlaps = (selection.start < spanEnd && selection.end > spanStart)
+        val overlaps = (selection.start < it.end && selection.end > it.start)
         if (!overlaps) return@any false
-
         when (type) {
             SpanType.BOLD -> it.item.fontWeight == FontWeight.Bold
             SpanType.ITALIC -> it.item.fontStyle == FontStyle.Italic
             SpanType.UNDERLINE -> it.item.textDecoration == TextDecoration.Underline
+            else -> false
         }
     }
 }
 
-fun toggleStyle(value: TextFieldValue, type: SpanType): TextFieldValue {
+fun getStyleValue(value: TextFieldValue, type: SpanType): String? {
     val selection = value.selection
-    if (selection.collapsed) return value // Simplification: Only style selection for now
+    if (selection.collapsed) return null
+    val match = value.annotatedString.spanStyles.find {
+        val overlaps = (selection.start < it.end && selection.end > it.start)
+        overlaps && when(type) {
+            SpanType.TEXT_COLOR -> it.item.color != Color.Unspecified
+            SpanType.BG_COLOR -> it.item.background != Color.Unspecified
+            SpanType.FONT_SIZE -> it.item.fontSize != TextUnit.Unspecified
+            else -> false
+        }
+    }
+    return when(type) {
+        SpanType.TEXT_COLOR -> match?.item?.color?.value?.toString()
+        SpanType.BG_COLOR -> match?.item?.background?.value?.toString()
+        SpanType.FONT_SIZE -> match?.item?.fontSize?.value?.toString()
+        else -> null
+    }
+}
 
+fun applyStyle(value: TextFieldValue, type: SpanType, param: String?): TextFieldValue {
+    val selection = value.selection
+    if (selection.collapsed) return value
     val builder = AnnotatedString.Builder(value.annotatedString)
 
-    // Remove existing style if present, otherwise add it
-    if (hasStyle(value, type)) {
-        // Compose doesn't have a simple "removeStyle", we technically have to rebuild.
-        // For this MVP, we will just add the style to the list.
-        // Real rich text editors require complex span management (splitting spans, merging, etc).
-        // Here, we simply APPEND a style. To "remove", we would need to filter the existing list.
-        // Implementing full "Remove Style" logic is complex code.
-        // For now, we will just ADD styles. To toggle OFF, user would normally need 'clear formatting'.
-        // NOTE: Truly toggling off requires filtering the 'spanStyles' list of the AnnotatedString.
-    } else {
-        val style = when (type) {
-            SpanType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
-            SpanType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
-            SpanType.UNDERLINE -> SpanStyle(textDecoration = TextDecoration.Underline)
-        }
-        builder.addStyle(style, selection.start, selection.end)
+    val style = when (type) {
+        SpanType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
+        SpanType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
+        SpanType.UNDERLINE -> SpanStyle(textDecoration = TextDecoration.Underline)
+        SpanType.TEXT_COLOR -> SpanStyle(color = Color(param!!.toULong()))
+        SpanType.BG_COLOR -> SpanStyle(background = Color(param!!.toULong()))
+        SpanType.FONT_SIZE -> SpanStyle(fontSize = param!!.toFloat().sp)
     }
-
+    builder.addStyle(style, selection.start, selection.end)
     return value.copy(annotatedString = builder.toAnnotatedString())
+}
+
+fun insertListPrefix(value: TextFieldValue, prefix: String): TextFieldValue {
+    val cursor = value.selection.start
+    // Find start of line
+    val text = value.text
+    var lineStart = text.lastIndexOf('\n', cursor - 1) + 1
+    if (lineStart < 0) lineStart = 0
+
+    val newText = text.substring(0, lineStart) + prefix + text.substring(lineStart)
+    return value.copy(
+        text = newText,
+        selection = TextRange(cursor + prefix.length)
+    )
 }

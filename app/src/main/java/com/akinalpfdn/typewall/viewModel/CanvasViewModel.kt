@@ -5,15 +5,15 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.akinalpfdn.typewall.model.Card
 import com.akinalpfdn.typewall.model.CardSpan
+import com.akinalpfdn.typewall.model.SpanType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-
-private const val TAG = "CanvasVMDebug"
 
 class CanvasViewModel(application: Application) : AndroidViewModel(application) {
     private val _cards = mutableStateListOf<Card>()
@@ -22,6 +22,17 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     var scale by mutableStateOf(1f)
     var offsetX by mutableStateOf(0f)
     var offsetY by mutableStateOf(0f)
+
+    // Tracks active styles at cursor (Type -> Value)
+    // e.g. BOLD -> null, TEXT_COLOR -> "#FF0000"
+    val activeStyles = mutableStateMapOf<SpanType, String?>()
+
+    // Callback to apply style with optional value (Color/Size)
+    var onApplyStyle: ((SpanType, String?) -> Unit)? by mutableStateOf(null)
+    // Callback to apply list formatting (Bullet, Number, Check)
+    var onInsertList: ((String) -> Unit)? by mutableStateOf(null)
+    // Callback to change the active card's background color
+    var onApplyCardColor: ((Long) -> Unit)? by mutableStateOf(null)
 
     private val gson = Gson()
     private val prefs = application.getSharedPreferences("typewall_prefs", Context.MODE_PRIVATE)
@@ -48,20 +59,25 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     fun updateCard(
         id: String,
         content: String? = null,
-        spans: List<CardSpan>? = null, // New parameter
+        spans: List<CardSpan>? = null,
         x: Float? = null,
         y: Float? = null,
-        width: Float? = null
+        width: Float? = null,
+        cardColor: Long? = null
     ) {
         val index = _cards.indexOfFirst { it.id == id }
         if (index != -1) {
             val oldCard = _cards[index]
+            // If cardColor is explicitly passed as -1L, we treat it as null (reset)
+            val newColor = if (cardColor == -1L) null else (cardColor ?: oldCard.cardColor)
+
             _cards[index] = oldCard.copy(
                 content = content ?: oldCard.content,
                 spans = spans ?: oldCard.spans,
                 x = x ?: oldCard.x,
                 y = y ?: oldCard.y,
-                width = width?.coerceAtLeast(200f) ?: oldCard.width
+                width = width?.coerceAtLeast(200f) ?: oldCard.width,
+                cardColor = newColor
             )
             saveCards()
         }
@@ -92,7 +108,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
                 val savedCards: List<Card> = gson.fromJson(json, type)
                 _cards.addAll(savedCards)
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading cards", e)
+                // Handle error
             }
         }
     }
