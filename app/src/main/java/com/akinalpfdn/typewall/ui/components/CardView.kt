@@ -248,7 +248,7 @@ fun updateViewModel(viewModel: CanvasViewModel, cardId: String, value: TextField
 fun buildAnnotatedStringFromCard(card: Card): AnnotatedString {
     return buildAnnotatedString {
         append(card.content)
-        card.spans.forEach { span ->
+        card.spans?.forEach { span ->
             try {
                 val style = when (span.type) {
                     SpanType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)

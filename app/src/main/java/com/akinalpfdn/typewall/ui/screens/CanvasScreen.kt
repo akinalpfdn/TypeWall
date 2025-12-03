@@ -31,14 +31,54 @@ import com.akinalpfdn.typewall.model.SpanType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import kotlin.math.roundToInt
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 // Enum to track which toolbar sub-menu is open
 enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR, FONT_SIZE }
 
 @Composable
 fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     var toolbarMode by remember { mutableStateOf(ToolbarMode.MAIN) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    // Export Launcher
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            try {
+                context.contentResolver.openOutputStream(it)?.use { outputStream ->
+                    val json = viewModel.getJsonData()
+                    outputStream.write(json.toByteArray())
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // Import Launcher
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            try {
+                context.contentResolver.openInputStream(it)?.use { inputStream ->
+                    val reader = BufferedReader(InputStreamReader(inputStream))
+                    val json = reader.readText()
+                    viewModel.loadJsonData(json)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     // Reset toolbar mode when losing focus
     LaunchedEffect(viewModel.onApplyStyle) {
@@ -104,6 +144,55 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             }
         }
 
+        // 6. Settings Button (Top Right)
+        IconButton(
+            onClick = { showSettingsDialog = true },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp, 48.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
+        ) {
+            Icon(Icons.Default.Settings, contentDescription = "Settings")
+        }
+
+        // 7. Settings Dialog
+        if (showSettingsDialog) {
+            AlertDialog(
+                onDismissRequest = { showSettingsDialog = false },
+                title = { Text("Settings") },
+                text = {
+                    Column {
+                        Text("Manage your data")
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = {
+                                exportLauncher.launch("typewall_backup.json")
+                                showSettingsDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Export Backup")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                importLauncher.launch("application/json")
+                                showSettingsDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Import Backup")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showSettingsDialog = false }) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+
         // 4. Expanded Rich Toolbar
         if (viewModel.onApplyStyle != null) {
             Surface(
@@ -149,7 +238,6 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             }
         } else {
             // 5. Canvas HUD
-            // Fix: Pass the align modifier here where BoxScope is valid
             CanvasControls(
                 viewModel = viewModel,
                 modifier = Modifier.align(Alignment.BottomCenter)

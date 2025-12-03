@@ -8,7 +8,7 @@ data class Card(
     var y: Float,
     var width: Float,
     var content: String,
-    var spans: List<CardSpan> = emptyList(),
+    var spans: List<CardSpan>? = emptyList(),
     var cardColor: Long? = null // ARGB Long
 )
 

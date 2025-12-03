@@ -112,4 +112,22 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    fun getJsonData(): String {
+        return gson.toJson(_cards)
+    }
+
+    fun loadJsonData(json: String): Boolean {
+        return try {
+            val type = object : TypeToken<List<Card>>() {}.type
+            val loadedCards: List<Card> = gson.fromJson(json, type)
+            _cards.clear()
+            _cards.addAll(loadedCards)
+            saveCards()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
 }
