@@ -37,12 +37,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import com.akinalpfdn.typewall.data.AppTheme
 import com.akinalpfdn.typewall.data.ThemePreferences
+import com.akinalpfdn.typewall.ui.components.MainToolbar
+import com.akinalpfdn.typewall.ui.components.ColorPalette
+import com.akinalpfdn.typewall.ui.components.FontSizeSelector
+import com.akinalpfdn.typewall.ui.components.CanvasControls
+import com.akinalpfdn.typewall.ui.components.ToolbarMode
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
-// Enum to track which toolbar sub-menu is open
-enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR, FONT_SIZE }
 
 @Composable
 fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
@@ -261,10 +264,11 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 AnimatedContent(targetState = toolbarMode, label = "toolbar") { mode ->
                     when (mode) {
                         ToolbarMode.MAIN -> MainToolbar(
-                            activeStyles = viewModel.activeStyles,
+                            activeStyles = viewModel.activeStyles.keys,
                             onToggleStyle = { type -> viewModel.onApplyStyle?.invoke(type, null) },
                             onOpenMode = { newMode -> toolbarMode = newMode },
-                            onInsertList = { prefix -> viewModel.onInsertList?.invoke(prefix) }
+                            onInsertList = { prefix -> viewModel.onInsertList?.invoke(prefix) },
+                            viewModel = viewModel
                         )
                         ToolbarMode.TEXT_COLOR -> ColorPalette(
                             title = "Text Color",
@@ -306,160 +310,3 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     }
 }
 
-// --- Sub-Components ---
-
-@Composable
-fun MainToolbar(
-    activeStyles: Map<SpanType, String?>,
-    onToggleStyle: (SpanType) -> Unit,
-    onOpenMode: (ToolbarMode) -> Unit,
-    onInsertList: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        // Toggles
-        ToolbarButton(Icons.Default.FormatBold, activeStyles.containsKey(SpanType.BOLD)) { onToggleStyle(SpanType.BOLD) }
-        ToolbarButton(Icons.Default.FormatItalic, activeStyles.containsKey(SpanType.ITALIC)) { onToggleStyle(SpanType.ITALIC) }
-        ToolbarButton(Icons.Default.FormatUnderlined, activeStyles.containsKey(SpanType.UNDERLINE)) { onToggleStyle(SpanType.UNDERLINE) }
-
-        VerticalDivider()
-
-        // Sub-menus
-        ToolbarButton(Icons.Default.FormatColorText, false) { onOpenMode(ToolbarMode.TEXT_COLOR) }
-        ToolbarButton(Icons.Default.FormatColorFill, false) { onOpenMode(ToolbarMode.BG_COLOR) }
-        ToolbarButton(Icons.Default.FormatSize, false) { onOpenMode(ToolbarMode.FONT_SIZE) }
-
-        VerticalDivider()
-
-        // Lists
-        ToolbarButton(Icons.Default.FormatListBulleted, false) { onInsertList("• ") }
-        ToolbarButton(Icons.Default.FormatListNumbered, false) { onInsertList("1. ") }
-        ToolbarButton(Icons.Default.CheckBox, false) { onInsertList("[ ] ") }
-
-        VerticalDivider()
-
-        // Card Props
-        ToolbarButton(Icons.Default.Palette, false) { onOpenMode(ToolbarMode.CARD_COLOR) }
-    }
-}
-
-@Composable
-fun ColorPalette(
-    title: String,
-    colors: List<Color> = listOf(
-                MaterialTheme.colorScheme.onSurface,
-                MaterialTheme.colorScheme.error,
-                MaterialTheme.colorScheme.primary,
-                MaterialTheme.colorScheme.secondary,
-                MaterialTheme.colorScheme.tertiary,
-                MaterialTheme.colorScheme.outline,
-                MaterialTheme.colorScheme.onSurfaceVariant,
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            ),
-    onSelect: (Color) -> Unit,
-    onBack: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
-        }
-        Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        colors.forEach { color ->
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(color)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                    .clickable { onSelect(color) }
-            )
-        }
-    }
-}
-
-@Composable
-fun FontSizeSelector(
-    onSelect: (Int) -> Unit,
-    onBack: () -> Unit
-) {
-    val sizes = listOf(12, 14, 16, 18, 20, 24, 30)
-    Row(
-        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
-        }
-        sizes.forEach { size ->
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .clickable { onSelect(size) }
-            ) {
-                Text(text = size.toString(), fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
-@Composable
-fun ToolbarButton(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
-    val tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val bg = if (isActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)).background(bg).clickable { onClick() }
-    ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
-    }
-}
-
-@Composable
-fun VerticalDivider() {
-    Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
-}
-
-@Composable
-fun CanvasControls(
-    viewModel: CanvasViewModel,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .padding(bottom = 32.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), MaterialTheme.shapes.extraLarge)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        IconButton(onClick = { viewModel.scale = (viewModel.scale - 0.1f).coerceAtLeast(0.1f) }) {
-            Text("-", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-        }
-        Text("${(viewModel.scale * 100).roundToInt()}%", color = MaterialTheme.colorScheme.onSurface)
-        IconButton(onClick = { viewModel.scale = (viewModel.scale + 0.1f).coerceAtMost(5f) }) {
-            Icon(Icons.Default.Add, contentDescription = "Zoom In", tint = MaterialTheme.colorScheme.onSurface)
-        }
-        Box(modifier = Modifier.width(1.dp).height(20.dp).background(MaterialTheme.colorScheme.outline))
-        IconButton(onClick = {
-            viewModel.scale = 1f
-            viewModel.offsetX = 0f
-            viewModel.offsetY = 0f
-        }) {
-            Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = MaterialTheme.colorScheme.onSurface)
-        }
-    }
-}
