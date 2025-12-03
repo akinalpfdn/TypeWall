@@ -195,7 +195,7 @@ fun CardView(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Delete",
-                    tint = Color.Red.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
                     modifier = Modifier.size(16.dp)
                 )
             }

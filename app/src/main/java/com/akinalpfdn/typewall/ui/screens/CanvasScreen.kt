@@ -35,6 +35,9 @@ import kotlin.math.roundToInt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import com.akinalpfdn.typewall.data.AppTheme
+import com.akinalpfdn.typewall.data.ThemePreferences
+import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -46,8 +49,10 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val themePreferences = remember { ThemePreferences(context) }
     var toolbarMode by remember { mutableStateOf(ToolbarMode.MAIN) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
 
     // Export Launcher
     val exportLauncher = rememberLauncherForActivityResult(
@@ -168,7 +173,18 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             Icon(Icons.Default.Settings, contentDescription = "Settings")
         }
 
-        // 7. Settings Dialog
+        // 7. Theme Switch Button (Below Settings)
+        IconButton(
+            onClick = { showThemeDialog = true },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp, 100.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
+        ) {
+            Icon(Icons.Default.Palette, contentDescription = "Theme")
+        }
+
+        // 8. Settings Dialog
         if (showSettingsDialog) {
             AlertDialog(
                 onDismissRequest = { showSettingsDialog = false },
@@ -200,6 +216,88 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 },
                 confirmButton = {
                     TextButton(onClick = { showSettingsDialog = false }) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+
+        // 9. Theme Dialog
+        if (showThemeDialog) {
+            val scope = rememberCoroutineScope()
+            val themeMode by themePreferences.themeMode.collectAsState(initial = AppTheme.SYSTEM)
+            val useDynamicColor by themePreferences.useDynamicColor.collectAsState(initial = true)
+
+            AlertDialog(
+                onDismissRequest = { showThemeDialog = false },
+                title = { Text("Theme Settings") },
+                text = {
+                    Column {
+                        Text("Choose your preferred theme:")
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Theme selection
+                        Column {
+                            AppTheme.values().forEach { theme ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            scope.launch {
+                                                themePreferences.setThemeMode(theme)
+                                            }
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = themeMode == theme,
+                                        onClick = {
+                                            scope.launch {
+                                                themePreferences.setThemeMode(theme)
+                                            }
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        when (theme) {
+                                            AppTheme.SYSTEM -> "Follow System"
+                                            AppTheme.LIGHT -> "Light Mode"
+                                            AppTheme.DARK -> "Dark Mode"
+                                        }
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Dynamic color toggle
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch {
+                                        themePreferences.setUseDynamicColor(!useDynamicColor)
+                                    }
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = useDynamicColor,
+                                onCheckedChange = { checked ->
+                                    scope.launch {
+                                        themePreferences.setUseDynamicColor(checked)
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Use Material You Colors (Android 12+)")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showThemeDialog = false }) {
                         Text("Close")
                     }
                 }
@@ -238,7 +336,14 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                         )
                         ToolbarMode.CARD_COLOR -> ColorPalette(
                             title = "Card Color",
-                            colors = listOf(Color(0xFFFFFFFF), Color(0xFFFFF8E1), Color(0xFFE3F2FD), Color(0xFFE8F5E9), Color(0xFFF3E5F5), Color(0xFFFFEBEE)),
+                            colors = listOf(
+                                MaterialTheme.colorScheme.surface,
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                MaterialTheme.colorScheme.errorContainer
+                            ),
                             onSelect = { color -> viewModel.onApplyCardColor?.invoke(color.value.toLong()) },
                             onBack = { toolbarMode = ToolbarMode.MAIN }
                         )
@@ -306,7 +411,16 @@ fun MainToolbar(
 @Composable
 fun ColorPalette(
     title: String,
-    colors: List<Color> = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow, Color.Magenta, Color.Cyan, Color.Gray),
+    colors: List<Color> = listOf(
+                MaterialTheme.colorScheme.onSurface,
+                MaterialTheme.colorScheme.error,
+                MaterialTheme.colorScheme.primary,
+                MaterialTheme.colorScheme.secondary,
+                MaterialTheme.colorScheme.tertiary,
+                MaterialTheme.colorScheme.outline,
+                MaterialTheme.colorScheme.onSurfaceVariant,
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            ),
     onSelect: (Color) -> Unit,
     onBack: () -> Unit
 ) {
@@ -323,7 +437,7 @@ fun ColorPalette(
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(color)
-                    .border(1.dp, Color.Gray, CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                     .clickable { onSelect(color) }
             )
         }
@@ -370,7 +484,7 @@ fun ToolbarButton(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun VerticalDivider() {
-    Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.Gray.copy(alpha = 0.3f)))
+    Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
 }
 
 @Composable
@@ -393,7 +507,7 @@ fun CanvasControls(
         IconButton(onClick = { viewModel.scale = (viewModel.scale + 0.1f).coerceAtMost(5f) }) {
             Icon(Icons.Default.Add, contentDescription = "Zoom In")
         }
-        Box(modifier = Modifier.width(1.dp).height(20.dp).background(Color.Gray))
+        Box(modifier = Modifier.width(1.dp).height(20.dp).background(MaterialTheme.colorScheme.outline))
         IconButton(onClick = {
             viewModel.scale = 1f
             viewModel.offsetX = 0f
