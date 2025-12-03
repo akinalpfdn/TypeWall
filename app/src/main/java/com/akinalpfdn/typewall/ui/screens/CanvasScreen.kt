@@ -52,7 +52,6 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     val themePreferences = remember { ThemePreferences(context) }
     var toolbarMode by remember { mutableStateOf(ToolbarMode.MAIN) }
     var showSettingsDialog by remember { mutableStateOf(false) }
-    var showThemeDialog by remember { mutableStateOf(false) }
 
     // Export Launcher
     val exportLauncher = rememberLauncherForActivityResult(
@@ -170,18 +169,42 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 .padding(16.dp, 48.dp)
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
         ) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings")
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Settings",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
         }
 
-        // 7. Theme Switch Button (Below Settings)
+        // 7. Theme Switch Button (Below Settings) - Direct toggle
+        val scope = rememberCoroutineScope()
+        val currentTheme by themePreferences.themeMode.collectAsState(initial = AppTheme.SYSTEM)
+
         IconButton(
-            onClick = { showThemeDialog = true },
+            onClick = {
+                scope.launch {
+                    val nextTheme = when (currentTheme) {
+                        AppTheme.SYSTEM -> AppTheme.LIGHT
+                        AppTheme.LIGHT -> AppTheme.DARK
+                        AppTheme.DARK -> AppTheme.SYSTEM
+                    }
+                    themePreferences.setThemeMode(nextTheme)
+                }
+            },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp, 100.dp)
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
         ) {
-            Icon(Icons.Default.Palette, contentDescription = "Theme")
+            Icon(
+                when (currentTheme) {
+                    AppTheme.DARK -> Icons.Default.LightMode
+                    AppTheme.LIGHT -> Icons.Default.DarkMode
+                    AppTheme.SYSTEM -> Icons.Default.BrightnessAuto
+                },
+                contentDescription = "Toggle Theme",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
         }
 
         // 8. Settings Dialog
@@ -222,88 +245,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             )
         }
 
-        // 9. Theme Dialog
-        if (showThemeDialog) {
-            val scope = rememberCoroutineScope()
-            val themeMode by themePreferences.themeMode.collectAsState(initial = AppTheme.SYSTEM)
-            val useDynamicColor by themePreferences.useDynamicColor.collectAsState(initial = true)
-
-            AlertDialog(
-                onDismissRequest = { showThemeDialog = false },
-                title = { Text("Theme Settings") },
-                text = {
-                    Column {
-                        Text("Choose your preferred theme:")
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Theme selection
-                        Column {
-                            AppTheme.values().forEach { theme ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            scope.launch {
-                                                themePreferences.setThemeMode(theme)
-                                            }
-                                        },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = themeMode == theme,
-                                        onClick = {
-                                            scope.launch {
-                                                themePreferences.setThemeMode(theme)
-                                            }
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        when (theme) {
-                                            AppTheme.SYSTEM -> "Follow System"
-                                            AppTheme.LIGHT -> "Light Mode"
-                                            AppTheme.DARK -> "Dark Mode"
-                                        }
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Dynamic color toggle
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    scope.launch {
-                                        themePreferences.setUseDynamicColor(!useDynamicColor)
-                                    }
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = useDynamicColor,
-                                onCheckedChange = { checked ->
-                                    scope.launch {
-                                        themePreferences.setUseDynamicColor(checked)
-                                    }
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Use Material You Colors (Android 12+)")
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showThemeDialog = false }) {
-                        Text("Close")
-                    }
-                }
-            )
-        }
-
+        
         // 4. Expanded Rich Toolbar
         if (viewModel.onApplyStyle != null) {
             Surface(
@@ -429,7 +371,9 @@ fun ColorPalette(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+        IconButton(onClick = onBack) {
+            Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
+        }
         Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         colors.forEach { color ->
             Box(
@@ -455,7 +399,9 @@ fun FontSizeSelector(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+        IconButton(onClick = onBack) {
+            Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
+        }
         sizes.forEach { size ->
             Box(
                 contentAlignment = Alignment.Center,
@@ -501,11 +447,11 @@ fun CanvasControls(
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         IconButton(onClick = { viewModel.scale = (viewModel.scale - 0.1f).coerceAtLeast(0.1f) }) {
-            Text("-", style = MaterialTheme.typography.titleLarge)
+            Text("-", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
         }
-        Text("${(viewModel.scale * 100).roundToInt()}%")
+        Text("${(viewModel.scale * 100).roundToInt()}%", color = MaterialTheme.colorScheme.onSurface)
         IconButton(onClick = { viewModel.scale = (viewModel.scale + 0.1f).coerceAtMost(5f) }) {
-            Icon(Icons.Default.Add, contentDescription = "Zoom In")
+            Icon(Icons.Default.Add, contentDescription = "Zoom In", tint = MaterialTheme.colorScheme.onSurface)
         }
         Box(modifier = Modifier.width(1.dp).height(20.dp).background(MaterialTheme.colorScheme.outline))
         IconButton(onClick = {
@@ -513,7 +459,7 @@ fun CanvasControls(
             viewModel.offsetX = 0f
             viewModel.offsetY = 0f
         }) {
-            Icon(Icons.Default.Refresh, contentDescription = "Reset")
+            Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
