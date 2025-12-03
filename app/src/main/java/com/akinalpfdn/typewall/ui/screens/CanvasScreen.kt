@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +45,7 @@ enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR, FONT_SIZE }
 fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var toolbarMode by remember { mutableStateOf(ToolbarMode.MAIN) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -104,11 +106,22 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     }
                 }
                 .pointerInput(Unit) {
-                    detectTapGestures(onTap = { offset ->
-                        focusManager.clearFocus()
-                        viewModel.onApplyStyle = null
-                        viewModel.addCard(offset.x, offset.y)
-                    })
+                    detectTapGestures(
+                        onTap = { offset ->
+                            // Dismiss keyboard when tapping anywhere on canvas
+                            focusManager.clearFocus()
+                            viewModel.onApplyStyle = null
+                            viewModel.onInsertList = null
+                            viewModel.onApplyCardColor = null
+                            keyboardController?.hide()
+                        },
+                        onLongPress = { offset ->
+                            // Create card on long press
+                            focusManager.clearFocus()
+                            viewModel.onApplyStyle = null
+                            viewModel.addCard(offset.x, offset.y)
+                        }
+                    )
                 }
         )
 
