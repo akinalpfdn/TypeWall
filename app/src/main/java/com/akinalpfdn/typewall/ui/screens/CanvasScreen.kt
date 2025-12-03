@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +57,20 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     val themePreferences = remember { ThemePreferences(context) }
     var toolbarMode by remember { mutableStateOf(ToolbarMode.MAIN) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+
+    // Calculate toolbar height for keyboard area detection
+    val toolbarHeightPx = with(LocalDensity.current) { 56.dp.toPx() }
+    val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val keyboardThresholdPx = screenHeightPx * 0.4f // 40% from bottom
+
+    // Handle additional scrolling when card is created in keyboard area
+    LaunchedEffect(viewModel.cardCreatedInKeyboardArea, viewModel.onApplyStyle != null) {
+        if (viewModel.cardCreatedInKeyboardArea && viewModel.onApplyStyle != null) {
+            // When keyboard appears for a card created in keyboard area, scroll up additional toolbar height
+            viewModel.offsetY -= toolbarHeightPx
+            viewModel.cardCreatedInKeyboardArea = false // Reset the flag
+        }
+    }
 
     // Export Launcher
     val exportLauncher = rememberLauncherForActivityResult(
@@ -123,11 +139,32 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                             keyboardController?.hide()
                         },
                         onLongPress = { offset ->
-                            // Create card on long press
-                            focusManager.clearFocus()
-                            viewModel.onApplyStyle = null
-                            viewModel.addCard(offset.x, offset.y)
-                        }
+    focusManager.clearFocus()
+    viewModel.onApplyStyle = null
+
+    // 1. Calculate Safety Variables
+    val paddingPx = 20.dp.toPx()
+    val safeLimitY = keyboardThresholdPx - toolbarHeightPx - paddingPx
+
+    // 2. ACTION 1: Create the card FIRST
+    // We do this first so the card is anchored to the correct world coordinates 
+    // based on the CURRENT viewport state.
+    viewModel.addCard(offset.x, offset.y)
+
+    // 3. ACTION 2: Scroll the Canvas SECOND
+    // Now that the card exists on the canvas, we move the camera (offsetY).
+    // The card will move UP along with the background.
+    if (offset.y > safeLimitY) {
+        val overflowAmount = offset.y - safeLimitY
+        
+        // Apply the scroll
+        viewModel.offsetY -= overflowAmount
+        
+        // IMPORTANT: Ensure we don't trigger the old LaunchedEffect logic
+        // by explicitly setting this to false (or ensuring it's not set to true)
+        viewModel.cardCreatedInKeyboardArea = false 
+    }
+}
                     )
                 }
         )

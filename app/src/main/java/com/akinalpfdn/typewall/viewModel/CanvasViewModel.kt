@@ -34,6 +34,9 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     // Callback to change the active card's background color
     var onApplyCardColor: ((Long) -> Unit)? by mutableStateOf(null)
 
+    // Flag to track if a card was created in the keyboard area
+    var cardCreatedInKeyboardArea by mutableStateOf(false)
+
     private val gson = Gson()
     private val prefs = application.getSharedPreferences("typewall_prefs", Context.MODE_PRIVATE)
 
