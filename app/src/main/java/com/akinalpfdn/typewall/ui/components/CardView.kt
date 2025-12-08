@@ -50,6 +50,8 @@ fun CardView(
     viewModel: CanvasViewModel
 ) {
     val currentCard by rememberUpdatedState(card)
+
+    // We do not use scale in calculation anymore, but keep param for compatibility
     val currentScale by rememberUpdatedState(scale)
 
     var isFocused by remember { mutableStateOf(false) }
@@ -76,12 +78,10 @@ fun CardView(
     LaunchedEffect(textFieldValue.selection, textFieldValue.annotatedString) {
         if (isFocused) {
             viewModel.activeStyles.clear()
-            // Check basic toggles
             if (hasStyle(textFieldValue, SpanType.BOLD)) viewModel.activeStyles[SpanType.BOLD] = null
             if (hasStyle(textFieldValue, SpanType.ITALIC)) viewModel.activeStyles[SpanType.ITALIC] = null
             if (hasStyle(textFieldValue, SpanType.UNDERLINE)) viewModel.activeStyles[SpanType.UNDERLINE] = null
 
-            // Check values (Color/Size)
             getStyleValue(textFieldValue, SpanType.TEXT_COLOR)?.let { viewModel.activeStyles[SpanType.TEXT_COLOR] = it }
             getStyleValue(textFieldValue, SpanType.BG_COLOR)?.let { viewModel.activeStyles[SpanType.BG_COLOR] = it }
             getStyleValue(textFieldValue, SpanType.FONT_SIZE)?.let { viewModel.activeStyles[SpanType.FONT_SIZE] = it }
@@ -94,10 +94,8 @@ fun CardView(
     val isEmpty = card.content.isEmpty()
     val isGhost = isEmpty && !isFocused
 
-    // Card Background Color Logic
     val cardBgColor = if (card.cardColor != null) Color(card.cardColor!!.toULong()) else MaterialTheme.colorScheme.surface
     val displayBgColor = if (isGhost) Color.Transparent else cardBgColor
-
     val borderColor = if (isGhost) Color.Transparent else MaterialTheme.colorScheme.outlineVariant
     val shadowElevation = if (isGhost) 0.dp else if (isFocused) 8.dp else 2.dp
 
@@ -123,14 +121,33 @@ fun CardView(
                 }
             }
             .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    viewModel.updateCard(
-                        id = currentCard.id,
-                        x = currentCard.x + (dragAmount.x / currentScale),
-                        y = currentCard.y + (dragAmount.y / currentScale)
-                    )
-                }
+                // Stable Drag Logic without Scale Division
+                var startX = 0f
+                var startY = 0f
+                var accumDragX = 0f
+                var accumDragY = 0f
+
+                detectDragGestures(
+                    onDragStart = {
+                        startX = currentCard.x
+                        startY = currentCard.y
+                        accumDragX = 0f
+                        accumDragY = 0f
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+
+                        // Accumulate raw drag amounts (Screen Pixels = World Units approx)
+                        accumDragX += dragAmount.x
+                        accumDragY += dragAmount.y
+
+                        viewModel.updateCard(
+                            id = currentCard.id,
+                            x = startX + accumDragX,
+                            y = startY + accumDragY
+                        )
+                    }
+                )
             }
     ) {
         Column {
@@ -156,7 +173,6 @@ fun CardView(
                                 hasGainedFocus = true
                                 keyboardController?.show()
 
-                                // Setup Callbacks
                                 viewModel.onApplyStyle = { type, value ->
                                     textFieldValue = applyStyle(textFieldValue, type, value)
                                     updateViewModel(viewModel, card.id, textFieldValue)
@@ -208,17 +224,27 @@ fun CardView(
                 .width(20.dp)
                 .offset(x = 10.dp)
                 .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        val newWidth = currentCard.width + (dragAmount.x / currentScale)
-                        viewModel.updateCard(id = currentCard.id, width = newWidth)
-                    }
+                    // Stable Resize Logic
+                    var startWidth = 0f
+                    var accumDragX = 0f
+
+                    detectDragGestures(
+                        onDragStart = {
+                            startWidth = currentCard.width
+                            accumDragX = 0f
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            accumDragX += dragAmount.x
+                            viewModel.updateCard(id = currentCard.id, width = startWidth + accumDragX)
+                        }
+                    )
                 }
         )
     }
 }
 
-// --- Rich Text Logic ---
+// --- Rich Text Logic Helpers ---
 
 fun updateViewModel(viewModel: CanvasViewModel, cardId: String, value: TextFieldValue) {
     val spans = value.annotatedString.spanStyles.flatMap { range ->
@@ -232,7 +258,6 @@ fun updateViewModel(viewModel: CanvasViewModel, cardId: String, value: TextField
             else -> null
         }
 
-        // Extract value
         val strValue = when(type) {
             SpanType.TEXT_COLOR -> range.item.color.value.toString()
             SpanType.BG_COLOR -> range.item.background.value.toString()
@@ -261,7 +286,7 @@ fun buildAnnotatedStringFromCard(card: Card): AnnotatedString {
                 if (span.start <= card.content.length && span.end <= card.content.length) {
                     addStyle(style, span.start, span.end)
                 }
-            } catch (e: Exception) { /* Ignore invalid spans */ }
+            } catch (e: Exception) { }
         }
     }
 }
@@ -320,7 +345,6 @@ fun applyStyle(value: TextFieldValue, type: SpanType, param: String?): TextField
 
 fun insertListPrefix(value: TextFieldValue, prefix: String): TextFieldValue {
     val cursor = value.selection.start
-    // Find start of line
     val text = value.text
     var lineStart = text.lastIndexOf('\n', cursor - 1) + 1
     if (lineStart < 0) lineStart = 0

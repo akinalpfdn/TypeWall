@@ -1,53 +1,40 @@
 package com.akinalpfdn.typewall.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.akinalpfdn.typewall.ui.components.CardView
-import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
-import com.akinalpfdn.typewall.model.SpanType
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import kotlin.math.roundToInt
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.platform.LocalContext
 import com.akinalpfdn.typewall.data.AppTheme
 import com.akinalpfdn.typewall.data.ThemePreferences
-import com.akinalpfdn.typewall.ui.components.MainToolbar
-import com.akinalpfdn.typewall.ui.components.ColorPalette
-import com.akinalpfdn.typewall.ui.components.FontSizeSelector
-import com.akinalpfdn.typewall.ui.components.CanvasControls
-import com.akinalpfdn.typewall.ui.components.ToolbarMode
+import com.akinalpfdn.typewall.model.SpanType
+import com.akinalpfdn.typewall.ui.components.*
+import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
-
 
 @Composable
 fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
@@ -61,14 +48,13 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     // Calculate toolbar height for keyboard area detection
     val toolbarHeightPx = with(LocalDensity.current) { 56.dp.toPx() }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val keyboardThresholdPx = screenHeightPx * 0.4f // 40% from bottom
+    val keyboardThresholdPx = screenHeightPx * 0.4f
 
     // Handle additional scrolling when card is created in keyboard area
     LaunchedEffect(viewModel.cardCreatedInKeyboardArea, viewModel.onApplyStyle != null) {
         if (viewModel.cardCreatedInKeyboardArea && viewModel.onApplyStyle != null) {
-            // When keyboard appears for a card created in keyboard area, scroll up additional toolbar height
             viewModel.offsetY -= toolbarHeightPx
-            viewModel.cardCreatedInKeyboardArea = false // Reset the flag
+            viewModel.cardCreatedInKeyboardArea = false
         }
     }
 
@@ -117,59 +103,63 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 1. Background Layer
+        // 1. Background Layer (Gestures)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        viewModel.scale = (viewModel.scale * zoom).coerceIn(0.1f, 5f)
-                        viewModel.offsetX += pan.x
-                        viewModel.offsetY += pan.y
+                    detectTransformGestures { centroid, pan, zoom, _ ->
+                        val oldScale = viewModel.scale
+                        val newScale = (oldScale * zoom).coerceIn(0.1f, 5f)
+                        val zoomFactor = newScale / oldScale
+
+                        // Update Scale
+                        viewModel.scale = newScale
+
+                        // Update Offset (Pivot around centroid)
+                        // Formula ensures the point under the finger stays in the same place visually
+                        viewModel.offsetX = (viewModel.offsetX - centroid.x) * zoomFactor + centroid.x + pan.x
+                        viewModel.offsetY = (viewModel.offsetY - centroid.y) * zoomFactor + centroid.y + pan.y
                     }
                 }
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onTap = { offset ->
-                            // Dismiss keyboard when tapping anywhere on canvas
+                        onTap = {
                             focusManager.clearFocus()
                             viewModel.onApplyStyle = null
                             viewModel.onInsertList = null
                             viewModel.onApplyCardColor = null
                             keyboardController?.hide()
                         },
-                        onLongPress = { offset ->
-    focusManager.clearFocus()
-    viewModel.onApplyStyle = null
+                        onLongPress = { tapOffset ->
+                            focusManager.clearFocus()
+                            viewModel.onApplyStyle = null
 
-    // 1. Calculate Safety Variables
-    val paddingPx = 20.dp.toPx()
-    val safeLimitY = keyboardThresholdPx - toolbarHeightPx - paddingPx
+                            // 1. Calculate World Coordinates
+                            // Since TransformOrigin is (0,0), the math is simply:
+                            val worldX = (tapOffset.x - viewModel.offsetX) / viewModel.scale
+                            val worldY = (tapOffset.y - viewModel.offsetY) / viewModel.scale
 
-    // 2. ACTION 1: Create the card FIRST
-    // We do this first so the card is anchored to the correct world coordinates 
-    // based on the CURRENT viewport state.
-    viewModel.addCard(offset.x, offset.y)
+                            // 2. Add Card
+                            viewModel.addCard(worldX, worldY)
 
-    // 3. ACTION 2: Scroll the Canvas SECOND
-    // Now that the card exists on the canvas, we move the camera (offsetY).
-    // The card will move UP along with the background.
-    if (offset.y > safeLimitY) {
-        val overflowAmount = offset.y - safeLimitY
-        
-        // Apply the scroll
-        viewModel.offsetY -= overflowAmount
-        
-        // IMPORTANT: Ensure we don't trigger the old LaunchedEffect logic
-        // by explicitly setting this to false (or ensuring it's not set to true)
-        viewModel.cardCreatedInKeyboardArea = false 
-    }
-}
+                            // 3. Optional: Keyboard avoidance logic
+                            // (Currently commented out to prevent "jumping" until positioning is verified)
+                            /*
+                            val paddingPx = 20.dp.toPx()
+                            val safeLimitY = keyboardThresholdPx - toolbarHeightPx - paddingPx
+                            if (tapOffset.y > safeLimitY) {
+                                val overflowAmount = tapOffset.y - safeLimitY
+                                viewModel.offsetY -= overflowAmount
+                                viewModel.cardCreatedInKeyboardArea = false
+                            }
+                            */
+                        }
                     )
                 }
         )
 
-        // 2. Content Layer
+        // 2. Content Layer (The Canvas)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -177,7 +167,9 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     scaleX = viewModel.scale,
                     scaleY = viewModel.scale,
                     translationX = viewModel.offsetX,
-                    translationY = viewModel.offsetY
+                    translationY = viewModel.offsetY,
+                    // IMPORTANT: Set pivot to top-left (0,0) so coordinate math is linear
+                    transformOrigin = TransformOrigin(0f, 0f)
                 )
         ) {
             viewModel.cards.forEach { card ->
@@ -201,7 +193,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             }
         }
 
-        // 6. Settings Button (Top Right)
+        // 4. Settings Button
         IconButton(
             onClick = { showSettingsDialog = true },
             modifier = Modifier
@@ -216,7 +208,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             )
         }
 
-        // 7. Theme Switch Button (Below Settings) - Direct toggle
+        // 5. Theme Switch Button
         val scope = rememberCoroutineScope()
         val currentTheme by themePreferences.themeMode.collectAsState(initial = AppTheme.SYSTEM)
 
@@ -247,7 +239,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             )
         }
 
-        // 8. Settings Dialog
+        // 6. Settings Dialog
         if (showSettingsDialog) {
             AlertDialog(
                 onDismissRequest = { showSettingsDialog = false },
@@ -285,8 +277,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
             )
         }
 
-        
-        // 4. Expanded Rich Toolbar
+        // 7. Toolbar HUD
         if (viewModel.onApplyStyle != null) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -297,7 +288,6 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     .windowInsetsPadding(WindowInsets.ime)
                     .wrapContentHeight()
             ) {
-                // We use AnimatedContent to swap between Main Toolbar and Sub-menus (Colors, Sizes)
                 AnimatedContent(targetState = toolbarMode, label = "toolbar") { mode ->
                     when (mode) {
                         ToolbarMode.MAIN -> MainToolbar(
@@ -338,7 +328,6 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 }
             }
         } else {
-            // 5. Canvas HUD
             CanvasControls(
                 viewModel = viewModel,
                 modifier = Modifier.align(Alignment.BottomCenter)
@@ -346,4 +335,3 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
         }
     }
 }
-
