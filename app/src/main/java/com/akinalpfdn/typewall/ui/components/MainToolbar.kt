@@ -1,6 +1,5 @@
 package com.akinalpfdn.typewall.ui.components
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +9,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -20,13 +22,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
 import com.akinalpfdn.typewall.model.SpanType
+import kotlin.math.roundToInt
 
 // Enum to track which toolbar sub-menu is open
 enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR, FONT_SIZE }
+
 
 @Composable
 fun MainToolbar(
@@ -39,46 +41,84 @@ fun MainToolbar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f), MaterialTheme.shapes.extraLarge)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .horizontalScroll(rememberScrollState()) // Enables the scrollable layout
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f))
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Bold
-        ToolbarButton(Icons.Default.FormatBold, SpanType.BOLD in activeStyles) {
-            onToggleStyle(SpanType.BOLD)
-        }
-
-        // Italic
-        ToolbarButton(Icons.Default.FormatItalic, SpanType.ITALIC in activeStyles) {
-            onToggleStyle(SpanType.ITALIC)
-        }
-
-        // Underline
-        ToolbarButton(Icons.Default.FormatUnderlined, SpanType.UNDERLINE in activeStyles) {
-            onToggleStyle(SpanType.UNDERLINE)
-        }
+        // --- History Group ---
+        ToolbarIcon(Icons.AutoMirrored.Filled.Undo, false) { /* Call Undo */ }
+        ToolbarIcon(Icons.AutoMirrored.Filled.Redo, false) { /* Call Redo */ }
 
         VerticalDivider()
 
-        // Text Color
-        ToolbarButton(Icons.Default.FormatColorText, false) { onOpenMode(ToolbarMode.TEXT_COLOR) }
-
-        // Text Background Color
-        ToolbarButton(Icons.Default.FormatColorFill, false) { onOpenMode(ToolbarMode.BG_COLOR) }
+        // --- Formatting Group ---
+        ToolbarIcon(Icons.Default.FormatBold, SpanType.BOLD in activeStyles) { onToggleStyle(SpanType.BOLD) }
+        ToolbarIcon(Icons.Default.FormatItalic, SpanType.ITALIC in activeStyles) { onToggleStyle(SpanType.ITALIC) }
+        ToolbarIcon(Icons.Default.FormatUnderlined, SpanType.UNDERLINE in activeStyles) { onToggleStyle(SpanType.UNDERLINE) }
+        ToolbarIcon(Icons.Default.FormatStrikethrough, SpanType.STRIKETHROUGH in activeStyles) { onToggleStyle(SpanType.STRIKETHROUGH) }
 
         VerticalDivider()
 
-        // Font Size
-        ToolbarButton(Icons.Default.FormatSize, false) { onOpenMode(ToolbarMode.FONT_SIZE) }
+        // --- Color & Size Group ---
+        ToolbarIcon(Icons.Default.FormatColorText, false) { onOpenMode(ToolbarMode.TEXT_COLOR) }
+        ToolbarIcon(Icons.Default.FormatColorFill, false) { onOpenMode(ToolbarMode.BG_COLOR) }
+        ToolbarIcon(Icons.Default.FormatSize, false) { onOpenMode(ToolbarMode.FONT_SIZE) }
 
-        // Lists
-        ToolbarButton(Icons.Default.FormatListBulleted, false) { onInsertList("• ") }
+        VerticalDivider()
 
-        // Card Props
-        ToolbarButton(Icons.Default.Palette, false) { onOpenMode(ToolbarMode.CARD_COLOR) }
+        // --- Alignment Group ---
+        ToolbarIcon(Icons.Default.FormatAlignLeft, SpanType.ALIGN_LEFT in activeStyles) { onToggleStyle(SpanType.ALIGN_LEFT) }
+        ToolbarIcon(Icons.Default.FormatAlignCenter, SpanType.ALIGN_CENTER in activeStyles) { onToggleStyle(SpanType.ALIGN_CENTER) }
+        ToolbarIcon(Icons.Default.FormatAlignRight, SpanType.ALIGN_RIGHT in activeStyles) { onToggleStyle(SpanType.ALIGN_RIGHT) }
+
+        VerticalDivider()
+
+        // --- Insert Group ---
+        ToolbarIcon(Icons.AutoMirrored.Filled.FormatListBulleted, false) { onInsertList("• ") }
+        // CHANGE THIS LINE:
+        ToolbarIcon(Icons.Default.CheckBox, SpanType.CHECKBOX in activeStyles) { onToggleStyle(SpanType.CHECKBOX) }
+        ToolbarIcon(Icons.Default.FormatQuote, SpanType.QUOTE in activeStyles) { onToggleStyle(SpanType.QUOTE) }
+        ToolbarIcon(Icons.Default.Code, SpanType.CODE in activeStyles) { onToggleStyle(SpanType.CODE) }
+        ToolbarIcon(Icons.Default.Link, false) { /* Open Link Dialog */ }
+
+        VerticalDivider()
+
+        // --- Card Properties ---
+        ToolbarIcon(Icons.Default.Palette, false) { onOpenMode(ToolbarMode.CARD_COLOR) }
     }
+}
+
+// ------------------------------------
+// UI HELPERS
+// ------------------------------------
+
+@Composable
+fun ToolbarIcon(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
+    val tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (isActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(40.dp) // Touch target size
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+    }
+}
+
+@Composable
+fun VerticalDivider() {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 4.dp)
+            .width(1.dp)
+            .height(24.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    )
 }
 
 @Composable
@@ -172,10 +212,7 @@ fun ToolbarButton(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
     }
 }
 
-@Composable
-fun VerticalDivider() {
-    Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
-}
+
 
 @Composable
 fun CanvasControls(
