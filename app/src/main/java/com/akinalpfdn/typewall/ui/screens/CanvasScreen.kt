@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.Rect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akinalpfdn.typewall.data.AppTheme
 import com.akinalpfdn.typewall.data.ThemePreferences
@@ -174,6 +175,15 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 }
             }
         }
+
+        // Edge Indicators for off-screen cards
+        EdgeIndicators(
+            cards = viewModel.cards,
+            viewportBounds = Rect.Zero, // Not needed for current implementation
+            offsetX = viewModel.offsetX,
+            offsetY = viewModel.offsetY,
+            scale = viewModel.scale
+        )
 
         // 3. Hint Overlay
         if (viewModel.cards.isEmpty()) {
