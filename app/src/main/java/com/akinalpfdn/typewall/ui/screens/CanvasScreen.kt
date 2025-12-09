@@ -135,13 +135,9 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                             focusManager.clearFocus()
                             viewModel.onApplyStyle = null
 
-                            // 1. Calculate World Coordinates
-                            // Since TransformOrigin is (0,0), the math is simply:
-                            val worldX = (tapOffset.x - viewModel.offsetX) / viewModel.scale
-                            val worldY = (tapOffset.y - viewModel.offsetY) / viewModel.scale
-
-                            // 2. Add Card
-                            viewModel.addCard(worldX, worldY)
+                            // Pass raw screen coordinates to addCard
+                            // The coordinate transformation will be handled in the ViewModel
+                            viewModel.addCard(tapOffset.x, tapOffset.y)
 
                             // 3. Optional: Keyboard avoidance logic
                             // (Currently commented out to prevent "jumping" until positioning is verified)

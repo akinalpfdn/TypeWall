@@ -44,13 +44,20 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
         loadCards()
     }
 
-    fun addCard(x: Float, y: Float) {
-        val canvasX = (x - offsetX) / scale - 100f
-        val canvasY = (y - offsetY) / scale - 20f
+    fun addCard(screenX: Float, screenY: Float) {
+        // Convert screen coordinates to world coordinates
+        // Formula: worldCoord = (screenCoord - panOffset) / scale
+        val worldX = (screenX - offsetX) / scale
+        val worldY = (screenY - offsetY) / scale
+
+        // Center the card on the touch point (optional adjustment)
+        // You can adjust these values to fine-tune the positioning
+        val cardOffsetX = -125f // Half of default card width (250f)
+        val cardOffsetY = -20f  // Small offset to position the touch point in the upper part of the card
 
         val newCard = Card(
-            x = canvasX,
-            y = canvasY,
+            x = worldX + cardOffsetX,
+            y = worldY + cardOffsetY,
             width = 250f,
             content = "",
             title = "",
