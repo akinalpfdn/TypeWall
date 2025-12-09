@@ -9,10 +9,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,18 +43,10 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     var toolbarMode by remember { mutableStateOf(ToolbarMode.MAIN) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
-    // Calculate toolbar height for keyboard area detection
+    // Removed local RichTextState. State belongs to the CardView now.
+
     val toolbarHeightPx = with(LocalDensity.current) { 56.dp.toPx() }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val keyboardThresholdPx = screenHeightPx * 0.4f
-
-    // Handle additional scrolling when card is created in keyboard area
-    LaunchedEffect(viewModel.cardCreatedInKeyboardArea, viewModel.onApplyStyle != null) {
-        if (viewModel.cardCreatedInKeyboardArea && viewModel.onApplyStyle != null) {
-            viewModel.offsetY -= toolbarHeightPx
-            viewModel.cardCreatedInKeyboardArea = false
-        }
-    }
 
     // Export Launcher
     val exportLauncher = rememberLauncherForActivityResult(
@@ -114,11 +103,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                         val newScale = (oldScale * zoom).coerceIn(0.1f, 5f)
                         val zoomFactor = newScale / oldScale
 
-                        // Update Scale
                         viewModel.scale = newScale
-
-                        // Update Offset (Pivot around centroid)
-                        // Formula ensures the point under the finger stays in the same place visually
                         viewModel.offsetX = (viewModel.offsetX - centroid.x) * zoomFactor + centroid.x + pan.x
                         viewModel.offsetY = (viewModel.offsetY - centroid.y) * zoomFactor + centroid.y + pan.y
                     }
@@ -135,22 +120,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                         onLongPress = { tapOffset ->
                             focusManager.clearFocus()
                             viewModel.onApplyStyle = null
-
-                            // Pass raw screen coordinates to addCard
-                            // The coordinate transformation will be handled in the ViewModel
                             viewModel.addCard(tapOffset.x, tapOffset.y)
-
-                            // 3. Optional: Keyboard avoidance logic
-                            // (Currently commented out to prevent "jumping" until positioning is verified)
-                            /*
-                            val paddingPx = 20.dp.toPx()
-                            val safeLimitY = keyboardThresholdPx - toolbarHeightPx - paddingPx
-                            if (tapOffset.y > safeLimitY) {
-                                val overflowAmount = tapOffset.y - safeLimitY
-                                viewModel.offsetY -= overflowAmount
-                                viewModel.cardCreatedInKeyboardArea = false
-                            }
-                            */
                         }
                     )
                 }
@@ -165,21 +135,24 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     scaleY = viewModel.scale,
                     translationX = viewModel.offsetX,
                     translationY = viewModel.offsetY,
-                    // IMPORTANT: Set pivot to top-left (0,0) so coordinate math is linear
                     transformOrigin = TransformOrigin(0f, 0f)
                 )
         ) {
             viewModel.cards.forEach { card ->
                 key(card.id) {
-                    CardView(card = card, scale = viewModel.scale, viewModel = viewModel)
+                    CardView(
+                        card = card,
+                        scale = viewModel.scale,
+                        viewModel = viewModel
+                    )
                 }
             }
         }
 
-        // Edge Indicators for off-screen cards
+        // Edge Indicators
         EdgeIndicators(
             cards = viewModel.cards,
-            viewportBounds = Rect.Zero, // Not needed for current implementation
+            viewportBounds = Rect.Zero,
             offsetX = viewModel.offsetX,
             offsetY = viewModel.offsetY,
             scale = viewModel.scale
@@ -192,7 +165,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Click anywhere to add a note",
+                    text = "Double tap or long press to add a note",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                 )
@@ -207,11 +180,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 .padding(16.dp, 48.dp)
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
         ) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = "Settings",
-                tint = MaterialTheme.colorScheme.onSurface
-            )
+            Icon(Icons.Default.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurface)
         }
 
         // 5. Theme Switch Button
@@ -240,7 +209,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     AppTheme.LIGHT -> Icons.Default.DarkMode
                     AppTheme.SYSTEM -> Icons.Default.BrightnessAuto
                 },
-                contentDescription = "Toggle Theme",
+                "Toggle Theme",
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }
@@ -254,32 +223,16 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     Column {
                         Text("Manage your data")
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = {
-                                exportLauncher.launch("typewall_backup.json")
-                                showSettingsDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Export Backup")
+                        Button(onClick = { exportLauncher.launch("typewall_backup.json"); showSettingsDialog = false }) {
+                            Text("Export Backup", modifier = Modifier.fillMaxWidth())
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = {
-                                importLauncher.launch("application/json")
-                                showSettingsDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Import Backup")
+                        Button(onClick = { importLauncher.launch("application/json"); showSettingsDialog = false }) {
+                            Text("Import Backup", modifier = Modifier.fillMaxWidth())
                         }
                     }
                 },
-                confirmButton = {
-                    TextButton(onClick = { showSettingsDialog = false }) {
-                        Text("Close")
-                    }
-                }
+                confirmButton = { TextButton(onClick = { showSettingsDialog = false }) { Text("Close") } }
             )
         }
 
@@ -297,7 +250,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 AnimatedContent(targetState = toolbarMode, label = "toolbar") { mode ->
                     when (mode) {
                         ToolbarMode.MAIN -> MainToolbar(
-                            activeStyles = viewModel.activeStyles.keys,
+                            activeStyles = viewModel.activeStyles.keys, // USE VIEWMODEL DIRECTLY
                             onToggleStyle = { type -> viewModel.onApplyStyle?.invoke(type, null) },
                             onOpenMode = { newMode -> toolbarMode = newMode },
                             onInsertList = { prefix -> viewModel.onInsertList?.invoke(prefix) },
