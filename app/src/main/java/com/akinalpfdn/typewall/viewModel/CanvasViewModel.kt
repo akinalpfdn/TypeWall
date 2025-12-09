@@ -53,6 +53,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
             y = canvasY,
             width = 250f,
             content = "",
+            title = "",
             spans = emptyList()
         )
         _cards.add(newCard)
@@ -62,6 +63,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     fun updateCard(
         id: String,
         content: String? = null,
+        title: String? = null,
         spans: List<CardSpan>? = null,
         x: Float? = null,
         y: Float? = null,
@@ -76,6 +78,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
 
             _cards[index] = oldCard.copy(
                 content = content ?: oldCard.content,
+                title = title ?: oldCard.title ?: "",
                 spans = spans ?: oldCard.spans,
                 x = x ?: oldCard.x,
                 y = y ?: oldCard.y,
@@ -109,7 +112,11 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val type = object : TypeToken<List<Card>>() {}.type
                 val savedCards: List<Card> = gson.fromJson(json, type)
-                _cards.addAll(savedCards)
+                // Ensure all cards have non-null titles
+                val cardsWithTitles = savedCards.map { card ->
+                    card.copy(title = card.title ?: "")
+                }
+                _cards.addAll(cardsWithTitles)
             } catch (e: Exception) {
                 // Handle error
             }

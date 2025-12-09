@@ -9,9 +9,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,11 +68,21 @@ fun CardView(
         )
     }
 
+    var titleFieldValue by remember(card.id) {
+        mutableStateOf(TextFieldValue(text = card.title ?: ""))
+    }
+
     LaunchedEffect(card.content, card.spans) {
         if (textFieldValue.text != card.content) {
             textFieldValue = textFieldValue.copy(
                 annotatedString = buildAnnotatedStringFromCard(card)
             )
+        }
+    }
+
+    LaunchedEffect(card.title) {
+        if (titleFieldValue.text != (card.title ?: "")) {
+            titleFieldValue = titleFieldValue.copy(text = card.title ?: "")
         }
     }
 
@@ -89,6 +101,7 @@ fun CardView(
     }
 
     val focusRequester = remember { FocusRequester() }
+    val titleFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     val isEmpty = card.content.isEmpty()
@@ -114,44 +127,106 @@ fun CardView(
             .shadow(shadowElevation, RoundedCornerShape(8.dp))
             .background(displayBgColor, RoundedCornerShape(8.dp))
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .pointerInput(Unit) {
-                detectTapGestures {
-                    focusRequester.requestFocus()
-                    keyboardController?.show()
-                }
-            }
-            .pointerInput(Unit) {
-                // Stable Drag Logic without Scale Division
-                var startX = 0f
-                var startY = 0f
-                var accumDragX = 0f
-                var accumDragY = 0f
-
-                detectDragGestures(
-                    onDragStart = {
-                        startX = currentCard.x
-                        startY = currentCard.y
-                        accumDragX = 0f
-                        accumDragY = 0f
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-
-                        // Accumulate raw drag amounts (Screen Pixels = World Units approx)
-                        accumDragX += dragAmount.x
-                        accumDragY += dragAmount.y
-
-                        viewModel.updateCard(
-                            id = currentCard.id,
-                            x = startX + accumDragX,
-                            y = startY + accumDragY
-                        )
-                    }
-                )
-            }
     ) {
         Column {
-            Box(modifier = Modifier.padding(12.dp)) {
+            // Header section with title and drag functionality
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        if (card.cardColor != null)
+                            Color(card.cardColor!!.toULong()).copy(alpha = 0.1f)
+                        else
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                        RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
+                    )
+                    .pointerInput(Unit) {
+                        // Drag gestures only in header
+                        var startX = 0f
+                        var startY = 0f
+                        var accumDragX = 0f
+                        var accumDragY = 0f
+
+                        detectDragGestures(
+                            onDragStart = {
+                                startX = currentCard.x
+                                startY = currentCard.y
+                                accumDragX = 0f
+                                accumDragY = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+
+                                // Accumulate raw drag amounts (Screen Pixels = World Units approx)
+                                accumDragX += dragAmount.x
+                                accumDragY += dragAmount.y
+
+                                viewModel.updateCard(
+                                    id = currentCard.id,
+                                    x = startX + accumDragX,
+                                    y = startY + accumDragY
+                                )
+                            }
+                        )
+                    }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    BasicTextField(
+                    value = titleFieldValue,
+                    onValueChange = { newValue ->
+                        titleFieldValue = newValue
+                        viewModel.updateCard(id = card.id, title = newValue.text)
+                    },
+                    textStyle = TextStyle(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(titleFocusRequester),
+                    decorationBox = { innerTextField ->
+                        if (titleFieldValue.text.isEmpty()) {
+                            Text(
+                                text = "Title",
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
+
+                    // Drag indicator
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "Drag",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        modifier = Modifier
+                            .size(20.dp)
+                            .padding(start = 8.dp)
+                    )
+                }
+            }
+
+            // Content section
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            focusRequester.requestFocus()
+                            keyboardController?.show()
+                        }
+                    }
+            ) {
                 BasicTextField(
                     value = textFieldValue,
                     onValueChange = { newValue ->
@@ -200,6 +275,7 @@ fun CardView(
             }
         }
 
+        // Delete button overlay
         if (isFocused) {
             IconButton(
                 onClick = { viewModel.removeCard(card.id) },
@@ -217,6 +293,7 @@ fun CardView(
             }
         }
 
+        // Resize handle
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
