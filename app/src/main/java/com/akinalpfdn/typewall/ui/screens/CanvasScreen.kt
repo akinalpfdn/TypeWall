@@ -92,22 +92,22 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .pointerInput(Unit) {
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    val oldScale = viewModel.scale
+                    val newScale = (oldScale * zoom).coerceIn(0.1f, 5f)
+                    val zoomFactor = newScale / oldScale
+
+                    viewModel.scale = newScale
+                    viewModel.offsetX = (viewModel.offsetX - centroid.x) * zoomFactor + centroid.x + pan.x
+                    viewModel.offsetY = (viewModel.offsetY - centroid.y) * zoomFactor + centroid.y + pan.y
+                }
+            }
     ) {
         // 1. Background Layer (Gestures)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        val oldScale = viewModel.scale
-                        val newScale = (oldScale * zoom).coerceIn(0.1f, 5f)
-                        val zoomFactor = newScale / oldScale
-
-                        viewModel.scale = newScale
-                        viewModel.offsetX = (viewModel.offsetX - centroid.x) * zoomFactor + centroid.x + pan.x
-                        viewModel.offsetY = (viewModel.offsetY - centroid.y) * zoomFactor + centroid.y + pan.y
-                    }
-                }
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = {
