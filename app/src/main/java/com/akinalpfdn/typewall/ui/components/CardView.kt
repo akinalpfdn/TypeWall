@@ -14,6 +14,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -317,12 +318,12 @@ fun CardView(
             }
         }
 
+        // Stretch Button
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .matchParentSize()
-                .width(20.dp)
-                .offset(x = 10.dp)
+                .offset(x = 8.dp)
+                .size(32.dp, 48.dp)
                 .pointerInput(Unit) {
                     var startWidth = 0f
                     var accumDragX = 0f
@@ -338,8 +339,16 @@ fun CardView(
                             viewModel.updateCard(id = currentCard.id, width = startWidth + accumDragX)
                         }
                     )
-                }
-        )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                modifier = Modifier.size(6.dp, 24.dp),
+                shape = RoundedCornerShape(3.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                shadowElevation = 2.dp
+            ) {}
+        }
     }
 }
 
