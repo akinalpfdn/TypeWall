@@ -214,10 +214,20 @@ fun CardView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(12.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            focusRequester.requestFocus()
-                            keyboardController?.show()
+                    .pointerInput(isEmpty, isFocused) {
+                        if (isEmpty || isFocused) {
+                            detectTapGestures {
+                                focusRequester.requestFocus()
+                                keyboardController?.show()
+                            }
+                        } else {
+                            detectTapGestures(
+                                onLongPress = {
+                                    focusRequester.requestFocus()
+                                    keyboardController?.show()
+                                },
+                                onTap = {}
+                            )
                         }
                     }
             ) {
@@ -266,6 +276,22 @@ fun CardView(
                     ),
                     placeholder = { Text("Type something...") }
                 )
+
+                if (!isEmpty && !isFocused) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onLongPress = {
+                                        focusRequester.requestFocus()
+                                        keyboardController?.show()
+                                    },
+                                    onTap = {}
+                                )
+                            }
+                    )
+                }
             }
         }
 
