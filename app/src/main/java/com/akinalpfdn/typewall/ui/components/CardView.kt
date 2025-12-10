@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ParagraphStyle
@@ -125,7 +126,8 @@ fun CardView(
     Box(
         modifier = Modifier
             .offset { IntOffset(card.x.roundToInt(), card.y.roundToInt()) }
-            .width(card.width.dp)
+            .requiredWidth(card.width.dp)
+            .wrapContentHeight(Alignment.Top, unbounded = true)
             .shadow(shadowElevation, RoundedCornerShape(8.dp))
             .background(displayBgColor, RoundedCornerShape(8.dp))
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
@@ -182,8 +184,8 @@ fun CardView(
                         },
                         textStyle = TextStyle(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold
                         ),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
                         modifier = Modifier
@@ -319,12 +321,13 @@ fun CardView(
         }
 
         // Stretch Button
+        val density = LocalDensity.current
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .offset(x = 8.dp)
                 .size(32.dp, 48.dp)
-                .pointerInput(Unit) {
+                .pointerInput(density) {
                     var startWidth = 0f
                     var accumDragX = 0f
 
@@ -335,7 +338,10 @@ fun CardView(
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            accumDragX += dragAmount.x
+                            // Convert pixels (dragAmount) to DP directly
+                            // formula: dp = px / density
+                            val dragAmountDp = dragAmount.x / density.density
+                            accumDragX += dragAmountDp
                             viewModel.updateCard(id = currentCard.id, width = startWidth + accumDragX)
                         }
                     )

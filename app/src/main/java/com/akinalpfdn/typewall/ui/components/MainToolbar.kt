@@ -124,21 +124,58 @@ fun VerticalDivider() {
 @Composable
 fun ColorPalette(
     title: String,
+    // Expanded list with vibrant Material Design colors
     colors: List<Color> = listOf(
-        MaterialTheme.colorScheme.onSurface,
-        MaterialTheme.colorScheme.error,
-        MaterialTheme.colorScheme.primary,
-        MaterialTheme.colorScheme.secondary,
-        MaterialTheme.colorScheme.tertiary,
-        MaterialTheme.colorScheme.outline,
-        MaterialTheme.colorScheme.onSurfaceVariant,
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        MaterialTheme.colorScheme.surface, // Default Black/Dark
+        MaterialTheme.colorScheme.onSurface, // Default Black/Dark
+        Color(0xFFE57373), // Pastel Red
+        Color(0xFFF06292), // Pastel Pink
+        Color(0xFFBA68C8), // Pastel Purple
+        Color(0xFF9575CD), // Pastel Deep Purple
+        Color(0xFF7986CB), // Pastel Indigo
+        Color(0xFF64B5F6), // Pastel Blue
+        Color(0xFF4FC3F7), // Pastel Light Blue
+        Color(0xFF4DD0E1), // Pastel Cyan
+        Color(0xFF4DB6AC), // Pastel Teal
+        Color(0xFF81C784), // Pastel Green
+        Color(0xFFAED581), // Pastel Light Green
+        Color(0xFFFFD54F), // Pastel Mustard/Yellow
+        Color(0xFFFFB74D), // Pastel Orange
+        Color(0xFFFF8A65), // Pastel Deep Orange
+        Color(0xFFA1887F), // Pastel Brown
+        Color(0xFFE0E0E0), // Pastel Grey
+        Color(0xFF90A4AE)  // Pastel Blue Grey
+         , // Default Black/Dark
+        Color(0xFFE53935), // Red
+        Color(0xFFD81B60), // Pink
+        Color(0xFF8E24AA), // Purple
+        Color(0xFF5E35B1), // Deep Purple
+        Color(0xFF3949AB), // Indigo
+        Color(0xFF1E88E5), // Blue
+        Color(0xFF039BE5), // Light Blue
+        Color(0xFF00ACC1), // Cyan
+        Color(0xFF00897B), // Teal
+        Color(0xFF43A047), // Green
+        Color(0xFF7CB342), // Light Green
+        Color(0xFFC0CA33), // Lime
+        Color(0xFFFDD835), // Yellow
+        Color(0xFFFFB300), // Amber
+        Color(0xFFFB8C00), // Orange
+        Color(0xFFF4511E), // Deep Orange
+        Color(0xFF6D4C41), // Brown
+        Color(0xFF757575), // Grey
+        Color(0xFF546E7A)  // Blue Grey
     ),
     onSelect: (Color) -> Unit,
     onBack: () -> Unit
 ) {
+
     Row(
-        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .padding(horizontal = 8.dp)
+            .horizontalScroll(rememberScrollState()), // Added scroll support for the longer list
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {

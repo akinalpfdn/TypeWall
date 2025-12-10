@@ -284,14 +284,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                         )
                         ToolbarMode.CARD_COLOR -> ColorPalette(
                             title = "Card Color",
-                            colors = listOf(
-                                MaterialTheme.colorScheme.surface,
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.tertiaryContainer,
-                                MaterialTheme.colorScheme.errorContainer
-                            ),
+
                             onSelect = { color -> viewModel.onApplyCardColor?.invoke(color.value.toLong()) },
                             onBack = { toolbarMode = ToolbarMode.MAIN }
                         )
