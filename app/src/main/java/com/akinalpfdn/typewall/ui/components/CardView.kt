@@ -30,7 +30,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ParagraphStyle
-import androidx.compose.ui.text.SpanStyle // IMPORTANT IMPORT
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -50,9 +50,7 @@ import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
-// Add this helper at the bottom of CardView.kt
 import androidx.compose.ui.text.TextRange
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,10 +88,39 @@ fun CardView(
         }
     }
 
-    // Sync Toolbar State
+    // Sync Toolbar State & Handle Checkbox Taps
     LaunchedEffect(richTextState.selection, richTextState.annotatedString) {
         if (isFocused) {
             syncToolbarState(viewModel, richTextState)
+            
+            // Checkbox Toggle Logic (Safe)
+            try {
+                val selection = richTextState.selection
+                if (selection.collapsed) {
+                    val text = richTextState.annotatedString.text
+                    val cursor = selection.min
+                    
+                    if (cursor > 0 && cursor <= text.length) {
+                        // Find line start
+                        val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+                        
+                        // Check if cursor is exactly at lineStart+1 or lineStart+2 (inside the 2-char box)
+                        if (cursor >= lineStart && cursor <= lineStart + 2) {
+                            val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+                            if (lineEnd >= lineStart + 2) {
+                                val lineSub = text.substring(lineStart, lineStart + 2)
+                                if (lineSub == "☐ " || lineSub == "☑ ") {
+                                     if (cursor < lineStart + 2) {
+                                         handleToolbarAction(SpanType.CHECKBOX, null, richTextState)
+                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore transient errors
+            }
         }
     }
 
@@ -338,8 +365,6 @@ fun CardView(
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            // Convert pixels (dragAmount) to DP directly
-                            // formula: dp = px / density
                             val dragAmountDp = dragAmount.x / density.density
                             accumDragX += dragAmountDp
                             viewModel.updateCard(id = currentCard.id, width = startWidth + accumDragX)
@@ -358,12 +383,6 @@ fun CardView(
     }
 }
 
-// Helper Functions internal to CardView
-// Place this at the bottom of CardView.kt, replacing the existing helpers
-
-// ... other imports
-
-// 2. MAIN HANDLER: The complete function with all cases
 private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextState) {
     when (type) {
         SpanType.BOLD -> state.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
@@ -400,48 +419,38 @@ private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextS
             val text = state.annotatedString.text
             val selection = state.selection
 
-            // Find start of the current line
             val lineStart = text.lastIndexOf('\n', selection.min - 1).let { if (it == -1) 0 else it + 1 }
-            // Find end of the current line
             val lineEnd = text.indexOf('\n', selection.max).let { if (it == -1) text.length else it }
             val lineText = text.substring(lineStart, lineEnd)
 
             if (lineText.startsWith("☐ ")) {
-                // CASE: Unchecked -> Checked (☑)
                 val current = state.annotatedString
                 val prefix = current.subSequence(0, lineStart)
                 val suffix = current.subSequence(lineStart + 2, current.length)
                 val newContent = prefix + AnnotatedString("☑ ") + suffix
 
-                // Select rest of line (to apply strikethrough)
                 updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd))
                 state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
                 
-                // Reset cursor
                 state.selection = androidx.compose.ui.text.TextRange(lineEnd)
 
             } else if (lineText.startsWith("☑ ")) {
-                // CASE: Checked -> Unchecked (☐)
                 val current = state.annotatedString
                 val prefix = current.subSequence(0, lineStart)
                 val suffix = current.subSequence(lineStart + 2, current.length)
                 val newContent = prefix + AnnotatedString("☐ ") + suffix
 
-                // Select rest of line (to remove strikethrough)
                 updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd))
                 state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
                 
-                // Reset cursor
                 state.selection = androidx.compose.ui.text.TextRange(lineEnd)
 
             } else {
-                // CASE: New Checkbox
                 val current = state.annotatedString
                 val prefix = current.subSequence(0, lineStart)
                 val suffix = current.subSequence(lineStart, current.length)
                 val newContent = prefix + AnnotatedString("☐ ") + suffix
 
-                // Insert at start
                 updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineEnd + 2))
             }
         }
@@ -465,12 +474,12 @@ private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextS
         }
     }
 }
+
 private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
     viewModel.activeStyles.clear()
     val currentSpan = state.currentSpanStyle
     val currentParagraph = state.currentParagraphStyle
 
-    // Toggles
     if (currentSpan.fontWeight == FontWeight.Bold) viewModel.activeStyles[SpanType.BOLD] = null
     if (currentSpan.fontStyle == FontStyle.Italic) viewModel.activeStyles[SpanType.ITALIC] = null
     if (TextDecoration.Underline in (currentSpan.textDecoration ?: TextDecoration.None)) {
@@ -480,7 +489,6 @@ private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
         viewModel.activeStyles[SpanType.STRIKETHROUGH] = null
     }
 
-    // Alignment
     when (currentParagraph.textAlign) {
         TextAlign.Left -> viewModel.activeStyles[SpanType.ALIGN_LEFT] = null
         TextAlign.Center -> viewModel.activeStyles[SpanType.ALIGN_CENTER] = null
@@ -488,7 +496,6 @@ private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
         else -> {}
     }
 
-    // Values
     if (currentSpan.color != Color.Unspecified) {
         viewModel.activeStyles[SpanType.TEXT_COLOR] = currentSpan.color.value.toString()
     }
@@ -499,25 +506,21 @@ private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
         viewModel.activeStyles[SpanType.FONT_SIZE] = currentSpan.fontSize.value.toString()
     }
 }
-// Helper to bypass internal restrictions and preserve styles
-// Helper to bypass internal restrictions and update state directly
+
 private fun updateRichTextState(state: RichTextState, content: AnnotatedString, selection: androidx.compose.ui.text.TextRange) {
     val newValue = TextFieldValue(content, selection)
     
-    // 1. Try methods
     val methodNames = listOf("onTextFieldValueChange", "onValueChange", "updateTextFieldValue")
     for (name in methodNames) {
         try {
             val method = state::class.java.getDeclaredMethod(name, TextFieldValue::class.java)
             method.isAccessible = true
             method.invoke(state, newValue)
-            return // Success
+            return
         } catch (e: Exception) {
-            // Continue
         }
     }
 
-    // 2. Try backing field (MutableState)
     try {
         val field = state::class.java.getDeclaredField("_textFieldValue")
         field.isAccessible = true
@@ -527,4 +530,9 @@ private fun updateRichTextState(state: RichTextState, content: AnnotatedString, 
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+private fun safeSubsequence(text: String, start: Int, end: Int): String {
+    if (start < 0 || end > text.length || start > end) return ""
+    return text.substring(start, end)
 }
