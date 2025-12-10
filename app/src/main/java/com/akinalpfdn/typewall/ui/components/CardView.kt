@@ -216,13 +216,17 @@ fun CardView(
                     .padding(12.dp)
                     .pointerInput(isEmpty, isFocused) {
                         if (isEmpty || isFocused) {
-                            detectTapGestures {
-                                focusRequester.requestFocus()
-                                keyboardController?.show()
-                            }
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    viewModel.focusPointY = card.y + offset.y + 60f
+                                    focusRequester.requestFocus()
+                                    keyboardController?.show()
+                                }
+                            )
                         } else {
                             detectTapGestures(
-                                onLongPress = {
+                                onLongPress = { offset ->
+                                    viewModel.focusPointY = card.y + offset.y + 60f
                                     focusRequester.requestFocus()
                                     keyboardController?.show()
                                 },
@@ -283,7 +287,8 @@ fun CardView(
                             .matchParentSize()
                             .pointerInput(Unit) {
                                 detectTapGestures(
-                                    onLongPress = {
+                                    onLongPress = { offset ->
+                                        viewModel.focusPointY = card.y + offset.y + 60f
                                         focusRequester.requestFocus()
                                         keyboardController?.show()
                                     },

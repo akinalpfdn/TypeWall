@@ -34,8 +34,8 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     // Callback to change the active card's background color
     var onApplyCardColor: ((Long) -> Unit)? by mutableStateOf(null)
 
-    // Flag to track if a card was created in the keyboard area
-    var cardCreatedInKeyboardArea by mutableStateOf(false)
+    // World Y coordinate of the last focus event (tap/long press)
+    var focusPointY by mutableStateOf<Float?>(null)
 
     private val gson = Gson()
     private val prefs = application.getSharedPreferences("typewall_prefs", Context.MODE_PRIVATE)
@@ -49,6 +49,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
         // Formula: worldCoord = (screenCoord - panOffset) / scale
         val worldX = (screenX - offsetX) / scale
         val worldY = (screenY - offsetY) / scale
+        focusPointY = worldY
 
         // Center the card on the touch point (optional adjustment)
         // You can adjust these values to fine-tune the positioning

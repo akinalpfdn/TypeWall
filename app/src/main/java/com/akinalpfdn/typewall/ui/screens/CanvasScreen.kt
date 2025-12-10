@@ -88,6 +88,21 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
         }
     }
 
+    // Scroll canvas when keyboard opens to keep active card visible
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(imeBottom, viewModel.focusPointY) {
+        if (imeBottom > 0 && viewModel.focusPointY != null) {
+            val pointScreenY = viewModel.focusPointY!! * viewModel.scale + viewModel.offsetY
+            val visibleScreenHeight = screenHeightPx - imeBottom - toolbarHeightPx
+            
+            if (pointScreenY > visibleScreenHeight) {
+                // Scroll the canvas by keyboard height + maintoolbar height as requested
+                val scrollAmount = imeBottom + toolbarHeightPx
+                viewModel.offsetY -= scrollAmount
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
