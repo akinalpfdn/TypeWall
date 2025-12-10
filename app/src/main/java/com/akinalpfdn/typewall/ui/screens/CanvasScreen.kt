@@ -42,6 +42,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     val themePreferences = remember { ThemePreferences(context) }
     var toolbarMode by remember { mutableStateOf(ToolbarMode.MAIN) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var isSidebarOpen by remember { mutableStateOf(false) }
 
     // Removed local RichTextState. State belongs to the CardView now.
 
@@ -265,7 +266,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 AnimatedContent(targetState = toolbarMode, label = "toolbar") { mode ->
                     when (mode) {
                         ToolbarMode.MAIN -> MainToolbar(
-                            activeStyles = viewModel.activeStyles.keys, // USE VIEWMODEL DIRECTLY
+                            activeStyles = viewModel.activeStyles.keys,
                             onToggleStyle = { type -> viewModel.onApplyStyle?.invoke(type, null) },
                             onOpenMode = { newMode -> toolbarMode = newMode },
                             onInsertList = { prefix -> viewModel.onInsertList?.invoke(prefix) },
@@ -306,6 +307,55 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                 viewModel = viewModel,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
+        }
+
+        // 8. Sidebar Toggle Button
+        IconButton(
+            onClick = { isSidebarOpen = true },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp, 48.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), CircleShape)
+        ) {
+            Icon(Icons.Default.Menu, "Menu", tint = MaterialTheme.colorScheme.onSurface)
+        }
+
+        // 9. Sidebar
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isSidebarOpen,
+            enter = androidx.compose.animation.slideInHorizontally(),
+            exit = androidx.compose.animation.slideOutHorizontally(),
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+             val density = LocalDensity.current
+             val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+             val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+             
+             Sidebar(
+                 cards = viewModel.cards, // Pass live list
+                 onCardClick = { card ->
+                     // Navigate to Card
+                     // Center logic: screenCenter = (cardX + cardWidth/2) * scale + offsetX
+                     // targetOffsetX = screenWidth/2 - (cardX + cardWidth/2) * scale
+                     
+                     val cardWidthPx = with(density) { card.width.dp.toPx() } // Approx since card.width is DP
+                     val cardCenterX = card.x + cardWidthPx / 2
+                     val cardCenterY = card.y
+                     
+                     // Reset scale to 1f for consistent view? Or keep current scale?
+                     // Usually navigating to a card implies "Zoom to Fit" or "Show clearly". 
+                     // Let's reset scale to 1f or existing scale.
+                     // The user experience of jumping is better if scale is reasonable.
+                     // Let's enforce 1f for clarity.
+                     viewModel.scale = 1f
+                     
+                     viewModel.offsetX = (screenWidthPx / 2) - cardCenterX
+                     viewModel.offsetY = (screenHeightPx / 2) - cardCenterY
+                     
+                     isSidebarOpen = false
+                 },
+                 onClose = { isSidebarOpen = false }
+             )
         }
     }
 }
