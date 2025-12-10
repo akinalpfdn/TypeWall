@@ -404,48 +404,45 @@ private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextS
             val lineStart = text.lastIndexOf('\n', selection.min - 1).let { if (it == -1) 0 else it + 1 }
             // Find end of the current line
             val lineEnd = text.indexOf('\n', selection.max).let { if (it == -1) text.length else it }
-
             val lineText = text.substring(lineStart, lineEnd)
 
             if (lineText.startsWith("☐ ")) {
                 // CASE: Unchecked -> Checked (☑)
+                val current = state.annotatedString
+                val prefix = current.subSequence(0, lineStart)
+                val suffix = current.subSequence(lineStart + 2, current.length)
+                val newContent = prefix + AnnotatedString("☑ ") + suffix
 
-                // Select "☐ "
-                state.selection = androidx.compose.ui.text.TextRange(lineStart, lineStart + 2)
-                // Replace with "☑ "
-                state.safeInsert("☑ ")
-
-                // Select rest of line and apply Strikethrough
-                state.selection = androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd)
+                // Select rest of line (to apply strikethrough)
+                updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd))
                 state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-
-                // Reset cursor to end of line
+                
+                // Reset cursor
                 state.selection = androidx.compose.ui.text.TextRange(lineEnd)
 
             } else if (lineText.startsWith("☑ ")) {
                 // CASE: Checked -> Unchecked (☐)
+                val current = state.annotatedString
+                val prefix = current.subSequence(0, lineStart)
+                val suffix = current.subSequence(lineStart + 2, current.length)
+                val newContent = prefix + AnnotatedString("☐ ") + suffix
 
-                // Select "☑ "
-                state.selection = androidx.compose.ui.text.TextRange(lineStart, lineStart + 2)
-                // Replace with "☐ "
-                state.safeInsert("☐ ")
-
-                // Select rest of line and remove Strikethrough
-                state.selection = androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd)
+                // Select rest of line (to remove strikethrough)
+                updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd))
                 state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-
+                
                 // Reset cursor
                 state.selection = androidx.compose.ui.text.TextRange(lineEnd)
 
             } else {
                 // CASE: New Checkbox
+                val current = state.annotatedString
+                val prefix = current.subSequence(0, lineStart)
+                val suffix = current.subSequence(lineStart, current.length)
+                val newContent = prefix + AnnotatedString("☐ ") + suffix
 
-                // Move to start of line
-                state.selection = androidx.compose.ui.text.TextRange(lineStart)
-                // Insert box
-                state.safeInsert("☐ ")
-                // Move cursor to end (accounting for added chars)
-                state.selection = androidx.compose.ui.text.TextRange(lineEnd + 2)
+                // Insert at start
+                updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineEnd + 2))
             }
         }
 
@@ -503,23 +500,30 @@ private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
     }
 }
 // Helper to bypass internal restrictions and preserve styles
-private fun RichTextState.safeInsert(text: String) {
+// Helper to bypass internal restrictions and update state directly
+private fun updateRichTextState(state: RichTextState, content: AnnotatedString, selection: androidx.compose.ui.text.TextRange) {
+    val newValue = TextFieldValue(content, selection)
+    
+    // 1. Try methods
+    val methodNames = listOf("onTextFieldValueChange", "onValueChange", "updateTextFieldValue")
+    for (name in methodNames) {
+        try {
+            val method = state::class.java.getDeclaredMethod(name, TextFieldValue::class.java)
+            method.isAccessible = true
+            method.invoke(state, newValue)
+            return // Success
+        } catch (e: Exception) {
+            // Continue
+        }
+    }
+
+    // 2. Try backing field (MutableState)
     try {
-        val current = this.annotatedString
-        val selection = this.selection
-
-        // 1. Construct new AnnotatedString (preserves existing spans)
-        val prefix = current.subSequence(0, selection.min)
-        val suffix = current.subSequence(selection.max, current.length)
-        val newContent = prefix + AnnotatedString(text) + suffix
-
-        // 2. Calculate new cursor position
-        val newSelection = androidx.compose.ui.text.TextRange(selection.min + text.length)
-
-        // 3. Use Reflection to call the internal update method
-        val method = this::class.java.getDeclaredMethod("onTextFieldValueChange", TextFieldValue::class.java)
-        method.isAccessible = true
-        method.invoke(this, TextFieldValue(newContent, newSelection))
+        val field = state::class.java.getDeclaredField("_textFieldValue")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val mutableState = field.get(state) as androidx.compose.runtime.MutableState<TextFieldValue>
+        mutableState.value = newValue
     } catch (e: Exception) {
         e.printStackTrace()
     }
