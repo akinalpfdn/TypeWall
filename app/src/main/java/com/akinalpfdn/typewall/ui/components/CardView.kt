@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
@@ -62,6 +64,7 @@ fun CardView(
     val currentCard by rememberUpdatedState(card)
     var isFocused by remember { mutableStateOf(false) }
     var hasGainedFocus by remember { mutableStateOf(false) }
+    var headerHeight by remember { mutableStateOf(0f) }
 
     val richTextState = rememberRichTextState()
 
@@ -164,6 +167,9 @@ fun CardView(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        headerHeight = coordinates.size.height.toFloat()
+                    }
                     .background(
                         if (card.cardColor != null)
                             Color(card.cardColor!!.toULong()).copy(alpha = 0.1f)
@@ -248,7 +254,7 @@ fun CardView(
                         if (isEmpty || isFocused) {
                             detectTapGestures(
                                 onTap = { offset ->
-                                    viewModel.focusPointY = card.y + offset.y + 60f
+                                    viewModel.focusPointY = card.y + offset.y + (headerHeight.takeIf { it > 0 } ?: 60f)
                                     focusRequester.requestFocus()
                                     keyboardController?.show()
                                 }
@@ -256,7 +262,7 @@ fun CardView(
                         } else {
                             detectTapGestures(
                                 onLongPress = { offset ->
-                                    viewModel.focusPointY = card.y + offset.y + 60f
+                                    viewModel.focusPointY = card.y + offset.y + (headerHeight.takeIf { it > 0 } ?: 60f)
                                     focusRequester.requestFocus()
                                     keyboardController?.show()
                                 },
@@ -301,6 +307,32 @@ fun CardView(
                                 }
                             }
                         },
+                    onTextLayout = { textLayoutResult ->
+                        if (isFocused) {
+                            val cursorIndex = richTextState.selection.end
+                            // Ensure index is within bounds
+                            val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
+                            val cursorRect = textLayoutResult.getCursorRect(clampedIndex)
+                            
+                            // Calculate absolute Y position of the cursor
+                            // Card Y + Header Height + Editor vertical Padding (12.dp) + Cursor Bottom
+                            val paddingPx = 12 * scale * 2.5f // Approximate padding in px, or better use Density
+                            // Actually, just use the card scale = 1f logic since we are passing scale.
+                            // But wait, the card logic uses dp.
+                            // Let's rely on standard density.
+                            
+                            // Safe fallback if headerHeight is 0
+                            val currentHeaderH = if (headerHeight > 0) headerHeight else 150f 
+                            
+                            // Note: We need to convert 12.dp to pixels for precision, but let's approximate or just rely on the flow.
+                            // Better: use LocalDensity
+                            
+                            val relativeCursorY = cursorRect.bottom 
+                            val totalY = card.y + currentHeaderH + relativeCursorY + 30f // +30f buffer for padding
+                            
+                            viewModel.focusPointY = totalY
+                        }
+                    },
                     colors = RichTextEditorDefaults.richTextEditorColors(
                         containerColor = Color.Transparent,
                         focusedIndicatorColor = Color.Transparent,

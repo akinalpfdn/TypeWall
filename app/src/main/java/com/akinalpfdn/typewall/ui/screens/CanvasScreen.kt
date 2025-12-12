@@ -90,18 +90,26 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
         }
     }
 
-    // Scroll canvas when keyboard opens to keep active card visible
+    // Center cursor in visible area when keyboard opens or cursor moves
     val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
     LaunchedEffect(imeBottom, viewModel.focusPointY) {
-        if (imeBottom > 0 && viewModel.focusPointY != null) {
-            val pointScreenY = viewModel.focusPointY!! * viewModel.scale + viewModel.offsetY
-            val visibleScreenHeight = screenHeightPx - imeBottom - toolbarHeightPx
+        if (viewModel.focusPointY != null && imeBottom > 0) {
+            // Calculate visible window height (Screen - Keyboard - Toolbar)
+            // We approximate toolbar height + top padding as ~60dp or just use the predefined constant
+            val availableHeight = screenHeightPx - imeBottom - toolbarHeightPx
             
-            if (pointScreenY > visibleScreenHeight) {
-                // Scroll the canvas by keyboard height + maintoolbar height as requested
-                val scrollAmount = imeBottom + toolbarHeightPx
-                viewModel.offsetY -= scrollAmount
-            }
+            // Target position is the center of the available space
+            val targetScreenY = availableHeight / 2f
+            
+            // Calculate required offset to place cursor at targetScreenY
+            // formula: (cursorY * scale) + offsetY = targetScreenY
+            // therefore: offsetY = targetScreenY - (cursorY * scale)
+            
+            val newOffsetY = targetScreenY - (viewModel.focusPointY!! * viewModel.scale)
+            
+            // Apply the offset. We can consider animating this if it feels too abrupt,
+            // but for "glued" keyboard interaction, direct update is often best.
+            viewModel.offsetY = newOffsetY
         }
     }
 
