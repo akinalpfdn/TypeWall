@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
     val context = LocalContext.current
@@ -253,45 +254,51 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
         }
 
         // 7. Toolbar HUD
-        if (viewModel.onApplyStyle != null) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shadowElevation = 8.dp,
+        val isImeVisible = WindowInsets.isImeVisible
+        if (viewModel.onApplyStyle != null && isImeVisible) {
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.ime)
-                    .wrapContentHeight()
+                    .fillMaxSize()
+                    .imePadding(),
+                contentAlignment = Alignment.BottomCenter
             ) {
-                AnimatedContent(targetState = toolbarMode, label = "toolbar") { mode ->
-                    when (mode) {
-                        ToolbarMode.MAIN -> MainToolbar(
-                            activeStyles = viewModel.activeStyles.keys,
-                            onToggleStyle = { type -> viewModel.onApplyStyle?.invoke(type, null) },
-                            onOpenMode = { newMode -> toolbarMode = newMode },
-                            onInsertList = { prefix -> viewModel.onInsertList?.invoke(prefix) },
-                            viewModel = viewModel
-                        )
-                        ToolbarMode.TEXT_COLOR -> ColorPalette(
-                            title = "Text Color",
-                            onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.TEXT_COLOR, color.value.toString()) },
-                            onBack = { toolbarMode = ToolbarMode.MAIN }
-                        )
-                        ToolbarMode.BG_COLOR -> ColorPalette(
-                            title = "Highlight Color",
-                            onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.BG_COLOR, color.value.toString()) },
-                            onBack = { toolbarMode = ToolbarMode.MAIN }
-                        )
-                        ToolbarMode.CARD_COLOR -> ColorPalette(
-                            title = "Card Color",
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                ) {
+                    AnimatedContent(targetState = toolbarMode, label = "toolbar") { mode ->
+                        when (mode) {
+                            ToolbarMode.MAIN -> MainToolbar(
+                                activeStyles = viewModel.activeStyles.keys,
+                                onToggleStyle = { type -> viewModel.onApplyStyle?.invoke(type, null) },
+                                onOpenMode = { newMode -> toolbarMode = newMode },
+                                onInsertList = { prefix -> viewModel.onInsertList?.invoke(prefix) },
+                                viewModel = viewModel
+                            )
+                            ToolbarMode.TEXT_COLOR -> ColorPalette(
+                                title = "Text Color",
+                                onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.TEXT_COLOR, color.value.toString()) },
+                                onBack = { toolbarMode = ToolbarMode.MAIN }
+                            )
+                            ToolbarMode.BG_COLOR -> ColorPalette(
+                                title = "Highlight Color",
+                                onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.BG_COLOR, color.value.toString()) },
+                                onBack = { toolbarMode = ToolbarMode.MAIN }
+                            )
+                            ToolbarMode.CARD_COLOR -> ColorPalette(
+                                title = "Card Color",
 
-                            onSelect = { color -> viewModel.onApplyCardColor?.invoke(color.value.toLong()) },
-                            onBack = { toolbarMode = ToolbarMode.MAIN }
-                        )
-                        ToolbarMode.FONT_SIZE -> FontSizeSelector(
-                            onSelect = { size -> viewModel.onApplyStyle?.invoke(SpanType.FONT_SIZE, size.toString()) },
-                            onBack = { toolbarMode = ToolbarMode.MAIN }
-                        )
+                                onSelect = { color -> viewModel.onApplyCardColor?.invoke(color.value.toLong()) },
+                                onBack = { toolbarMode = ToolbarMode.MAIN }
+                            )
+                            ToolbarMode.FONT_SIZE -> FontSizeSelector(
+                                onSelect = { size -> viewModel.onApplyStyle?.invoke(SpanType.FONT_SIZE, size.toString()) },
+                                onBack = { toolbarMode = ToolbarMode.MAIN }
+                            )
+                        }
                     }
                 }
             }
