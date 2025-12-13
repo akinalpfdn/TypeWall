@@ -226,10 +226,10 @@ fun CardView(
                             titleFieldValue = newValue
                             viewModel.updateCard(id = card.id, title = newValue.text, saveHistory = false)
                         },
-                        textStyle = TextStyle(
+                        textStyle = MaterialTheme.typography.titleLarge.copy(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 28.sp // Explicit size override if needed, but family comes from theme
                         ),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
                         modifier = Modifier
@@ -290,6 +290,7 @@ fun CardView(
             ) {
                 RichTextEditor(
                     state = richTextState,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
