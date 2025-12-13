@@ -63,6 +63,10 @@ fun MainToolbar(
 
         VerticalDivider()
 
+        // CHANGE THIS LINE:
+        ToolbarIcon(Icons.Default.CheckBox, SpanType.CHECKBOX in activeStyles) { onToggleStyle(SpanType.CHECKBOX) }
+        // --- Insert Group ---
+        ToolbarIcon(Icons.AutoMirrored.Filled.FormatListBulleted, false) { onInsertList("• ") }
         // --- Formatting Group ---
         ToolbarIcon(Icons.Default.FormatBold, SpanType.BOLD in activeStyles) { onToggleStyle(SpanType.BOLD) }
         ToolbarIcon(Icons.Default.FormatItalic, SpanType.ITALIC in activeStyles) { onToggleStyle(SpanType.ITALIC) }
@@ -74,7 +78,8 @@ fun MainToolbar(
         // --- Color & Size Group ---
         ToolbarIcon(Icons.Default.FormatColorText, false) { onOpenMode(ToolbarMode.TEXT_COLOR) }
         ToolbarIcon(Icons.Default.FormatColorFill, false) { onOpenMode(ToolbarMode.BG_COLOR) }
-        
+
+        ToolbarIcon(Icons.Default.Palette, false) { onOpenMode(ToolbarMode.CARD_COLOR) }
         // Font Size Wheel Picker
         Box {
             var showFontSizeMenu by remember { mutableStateOf(false) }
@@ -102,20 +107,11 @@ fun MainToolbar(
         ToolbarIcon(Icons.Default.FormatAlignCenter, SpanType.ALIGN_CENTER in activeStyles) { onToggleStyle(SpanType.ALIGN_CENTER) }
         ToolbarIcon(Icons.Default.FormatAlignRight, SpanType.ALIGN_RIGHT in activeStyles) { onToggleStyle(SpanType.ALIGN_RIGHT) }
 
-        VerticalDivider()
 
-        // --- Insert Group ---
-        ToolbarIcon(Icons.AutoMirrored.Filled.FormatListBulleted, false) { onInsertList("• ") }
-        // CHANGE THIS LINE:
-        ToolbarIcon(Icons.Default.CheckBox, SpanType.CHECKBOX in activeStyles) { onToggleStyle(SpanType.CHECKBOX) }
-        ToolbarIcon(Icons.Default.FormatQuote, SpanType.QUOTE in activeStyles) { onToggleStyle(SpanType.QUOTE) }
-        ToolbarIcon(Icons.Default.Code, SpanType.CODE in activeStyles) { onToggleStyle(SpanType.CODE) }
-        ToolbarIcon(Icons.Default.Link, false) { /* Open Link Dialog */ }
 
-        VerticalDivider()
 
-        // --- Card Properties ---
-        ToolbarIcon(Icons.Default.Palette, false) { onOpenMode(ToolbarMode.CARD_COLOR) }
+
+
     }
 }
 
