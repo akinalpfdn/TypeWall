@@ -244,9 +244,15 @@ fun CardView(
                         viewModel = viewModel, // Pass the VM
                         cardId = card.id,
                         onFocus = {
-                            // This runs when ANY checklist item gets clicked
+                            // This runs when ANY checklist item reports focus (e.g. programmatically)
                             isFocused = true
                             hasGainedFocus = true
+                        },
+                        isCardFocused = isFocused,
+                        onRequestFocus = {
+                            isFocused = true
+                            hasGainedFocus = true
+                            keyboardController?.show()
                         }
 
                     )
@@ -481,7 +487,9 @@ fun ChecklistEditor(
     onContentChange: (String) -> Unit,
     viewModel: CanvasViewModel,
     cardId: String,
-    onFocus: () -> Unit
+    onFocus: () -> Unit,
+    isCardFocused: Boolean,
+    onRequestFocus: () -> Unit
 ) {
     // 1. Parse content into Hybrid Items
     val initialItems = remember(content) {
@@ -587,7 +595,9 @@ fun ChecklistEditor(
                     viewModel = viewModel,
                     cardId = cardId,
                     isLastItem = index == items.lastIndex,
-                    onFocus = onFocus
+                    onFocus = onFocus,
+                    isCardFocused = isCardFocused,
+                    onRequestFocus = onRequestFocus
                 )
             }
         }
@@ -609,7 +619,9 @@ private fun HybridRowItem(
     viewModel: CanvasViewModel,
     cardId: String,
     isLastItem: Boolean,
-    onFocus: () -> Unit
+    onFocus: () -> Unit,
+    isCardFocused: Boolean,
+    onRequestFocus: () -> Unit
 ) {
     val richTextState = rememberRichTextState()
     val ZWSP = "\u200B"
@@ -742,6 +754,27 @@ private fun HybridRowItem(
                 )
 
             )
+
+            // Overlay to Intercept Touches when NOT focused (View Mode)
+            if (!isCardFocused) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onLongPress = {
+                                    onRequestFocus()
+                                    // Small delay to allow state update to remove overlay
+                                    // But usually requestFocus works immediately if component is composed
+                                    focusRequester.requestFocus()
+                                },
+                                onTap = {
+                                    // Swallow tap to prevent keyboard opening
+                                }
+                            )
+                        }
+                )
+            }
         }
     }
 
