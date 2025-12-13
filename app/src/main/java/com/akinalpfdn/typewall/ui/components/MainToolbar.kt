@@ -32,6 +32,10 @@ import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
 import com.akinalpfdn.typewall.model.SpanType
 import kotlin.math.roundToInt
 
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
+
 // Enum to track which toolbar sub-menu is open
 enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR }
 
@@ -266,9 +270,14 @@ fun FontSizeWheelPicker(
     
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = startIndex) { sizes.size }
     
-    // Update selection as we scroll
-    LaunchedEffect(pagerState.currentPage) {
-        onSizeSelected(sizes[pagerState.currentPage])
+    // Update selection as we scroll, but DROP the first emission (initial state)
+    // to prevent resetting the font size just by opening the menu.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .drop(1)
+            .collect { page ->
+                onSizeSelected(sizes[page])
+            }
     }
 
     androidx.compose.ui.window.Popup(
