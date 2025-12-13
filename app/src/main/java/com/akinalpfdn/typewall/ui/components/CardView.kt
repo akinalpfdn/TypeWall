@@ -612,8 +612,18 @@ private fun HybridRowItem(
     onFocus: () -> Unit
 ) {
     val richTextState = rememberRichTextState()
+    val ZWSP = "\u200B"
+    var lastTextValue by remember { mutableStateOf<String?>(null) } // Initialize as null to skip first trigger if needed
 
-    LaunchedEffect(Unit) { richTextState.setHtml(initialHtml) }
+    LaunchedEffect(Unit) {
+        if (initialHtml.isEmpty()) {
+            richTextState.setText(ZWSP)
+            lastTextValue = ZWSP
+        } else {
+            richTextState.setHtml(initialHtml)
+            lastTextValue = richTextState.annotatedString.text
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (initialHtml.isEmpty()) {
@@ -672,7 +682,10 @@ private fun HybridRowItem(
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(
-                    onNext = { onEnter(richTextState.annotatedString.text.isEmpty()) }
+                    onNext = {
+                        val text = richTextState.annotatedString.text
+                        onEnter(text.isEmpty() || text == ZWSP)
+                    }
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -703,19 +716,19 @@ private fun HybridRowItem(
                         }
                     }
                     .onKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown) {
-                            // FIX: Use .text.isEmpty() to ignore hidden formatting tags
-                            val isEmpty = richTextState.annotatedString.text.isEmpty()
-
-                            if (event.key == Key.Backspace && isEmpty) {
-                                onBackspace()
-                                true
-                            } else if (event.key == Key.Enter) {
-                                onEnter(richTextState.annotatedString.text.isEmpty())
-                                true
-                            } else {
-                                false
-                            }
+                        // Keep distinct DELETE key support for hardware keyboards
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.Delete) {
+                             val text = richTextState.annotatedString.text
+                             // If it contains only ZWSP or is empty, treat as empty
+                             if (text.isEmpty() || text == ZWSP) {
+                                 onBackspace()
+                                 true
+                             } else false
+                        } else if (event.type == KeyEventType.KeyDown && event.key == Key.Enter) {
+                             val text = richTextState.annotatedString.text
+                             // Treat ZWSP only as empty
+                             onEnter(text.isEmpty() || text == ZWSP)
+                             true
                         } else {
                             false
                         }
@@ -726,24 +739,65 @@ private fun HybridRowItem(
                     unfocusedIndicatorColor = Color.Transparent,
                     textColor = MaterialTheme.colorScheme.onSurface,
                     placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                ),
-                placeholder = {
-                    if (isLastItem && itemType == RowType.TEXT) Text("Type something...")
-                    else if (isLastItem) Text("List item...")
-                }
+                )
+
             )
         }
     }
 
-    // Safety sync
+    // Safety sync and ZWSP Logic
     LaunchedEffect(richTextState.annotatedString) {
-        val currentHtml = richTextState.toHtml()
-        if (richTextState.annotatedString.text.contains('\n')) {
-            val cleanText = richTextState.annotatedString.text.replace("\n", "")
-            richTextState.setText(cleanText)
+        val currentText = richTextState.annotatedString.text
+        
+        // Skip if this is the initial set or no change relevant to our logic logic loop
+        if (lastTextValue != null && currentText == lastTextValue) return@LaunchedEffect
+
+        // 1. Check for Backspace on Empty (Transition from ZWSP -> Empty)
+        if (currentText.isEmpty()) {
+            if (lastTextValue == ZWSP) {
+                // User deleted the ZWSP -> trigger row deletion
+                onBackspace()
+            } else {
+                // User cleared text ("a" -> "") -> Restore ZWSP
+                richTextState.setText(ZWSP)
+                lastTextValue = ZWSP
+                onHtmlChange("")
+            }
+            return@LaunchedEffect
+        }
+
+        // 2. Handle Newlines (Enter)
+        if (currentText.contains('\n')) {
+            val cleanText = currentText.replace("\n", "").replace(ZWSP, "")
+            richTextState.setText(if (cleanText.isEmpty()) ZWSP else cleanText)
+            lastTextValue = if (cleanText.isEmpty()) ZWSP else cleanText
+            // If it was just ZWSP + Enter, cleanText is empty -> trigger Enter on Empty
             onEnter(cleanText.isEmpty())
-        } else if (currentHtml != initialHtml) {
-            onHtmlChange(currentHtml)
+            return@LaunchedEffect
+        }
+
+        // 3. User typed text (ZWSP + "a") -> Strip ZWSP
+        if (currentText.startsWith(ZWSP) && currentText.length > 1) {
+            val realText = currentText.substring(1) // remove ZWSP
+            richTextState.setText(realText)
+            // Updating text will re-trigger this effect, but next time it won't start with ZWSP/match logic
+            lastTextValue = realText 
+            // We want to force a save here of the REAL text
+            onHtmlChange(richTextState.toHtml()) // note: logic loop might need care here. 
+            // Setting text spawns new state. We'll update lastTextValue in next pass or here?
+            // Safer to let the next pass handle the "stable" state recording?
+            // But we need to save now.
+            return@LaunchedEffect
+        }
+        
+        // 4. Normal Text Update
+        lastTextValue = currentText
+        val currentHtml = richTextState.toHtml()
+        // Ensure we don't save ZWSP to the content model
+        if (currentText == ZWSP) {
+             if (initialHtml.isNotEmpty()) onHtmlChange("")
+        } else {
+             if (currentHtml != initialHtml) onHtmlChange(currentHtml)
         }
     }
 }
