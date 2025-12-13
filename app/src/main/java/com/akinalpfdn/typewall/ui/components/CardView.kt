@@ -458,11 +458,22 @@ fun CardView(
 
 // --- SAMSUNG STYLE CHECKLIST MODE ---
 
-data class ChecklistItemData(
+// --- HYBRID EDITOR (SAMSUNG STYLE) ---
+
+// --- HYBRID EDITOR (SAMSUNG STYLE WITH FOCUS FIX) ---
+
+// --- HYBRID EDITOR (SAMSUNG STYLE: TEXT + CHECKBOX + BULLETS) ---
+
+data class HybridItemData(
     val id: String,
-    val isChecked: Boolean,
-    val text: String
+    val type: RowType,
+    val text: String,
+    val isChecked: Boolean = false
 )
+
+enum class RowType {
+    CHECKBOX, BULLET, TEXT
+}
 
 @Composable
 fun ChecklistEditor(
@@ -472,32 +483,61 @@ fun ChecklistEditor(
     cardId: String,
     onFocus: () -> Unit
 ) {
-    // 1. Parse content
+    // 1. Parse content into Hybrid Items
     val initialItems = remember(content) {
         val lines = content.split('\n')
         lines.mapIndexed { index, line ->
-            val isChecked = line.startsWith("☑")
-            val cleanHtml = line.removePrefix("☐ ").removePrefix("☑ ")
-            ChecklistItemData(index.toString(), isChecked, cleanHtml)
+            when {
+                line.startsWith("☑") -> {
+                    val cleanHtml = line.removePrefix("☑ ")
+                    HybridItemData(index.toString(), RowType.CHECKBOX, cleanHtml, isChecked = true)
+                }
+                line.startsWith("☐") -> {
+                    val cleanHtml = line.removePrefix("☐ ")
+                    HybridItemData(index.toString(), RowType.CHECKBOX, cleanHtml, isChecked = false)
+                }
+                line.startsWith("•") -> {
+                    val cleanHtml = line.removePrefix("• ")
+                    HybridItemData(index.toString(), RowType.BULLET, cleanHtml)
+                }
+                else -> {
+                    HybridItemData(index.toString(), RowType.TEXT, line)
+                }
+            }
         }
     }
 
-    val items = remember { mutableStateListOf<ChecklistItemData>().apply { addAll(initialItems) } }
+    val items = remember { mutableStateListOf<HybridItemData>().apply { addAll(initialItems) } }
+    val focusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
 
     fun saveAll() {
         val fullContent = items.joinToString("\n") { item ->
-            val prefix = if (item.isChecked) "☑ " else "☐ "
-            prefix + item.text
+            when (item.type) {
+                RowType.CHECKBOX -> {
+                    val prefix = if (item.isChecked) "☑ " else "☐ "
+                    prefix + item.text
+                }
+                RowType.BULLET -> "• " + item.text
+                RowType.TEXT -> item.text
+            }
         }
         onContentChange(fullContent)
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         items.forEachIndexed { index, item ->
+            val itemFocusRequester = focusRequesters.getOrPut(item.id) { FocusRequester() }
+
             key(item.id) {
-                ChecklistRowItem(
+                HybridRowItem(
                     initialHtml = item.text,
+                    itemType = item.type,
                     isChecked = item.isChecked,
+                    focusRequester = itemFocusRequester,
+                    onTypeChange = { newType ->
+                        items[index] = items[index].copy(type = newType)
+                        saveAll()
+                    },
                     onCheckedChange = { checked ->
                         items[index] = items[index].copy(isChecked = checked)
                         saveAll()
@@ -506,20 +546,43 @@ fun ChecklistEditor(
                         items[index] = items[index].copy(text = newHtml)
                         saveAll()
                     },
-                    onDelete = {
+                    onBackspace = {
+                        // BACKSPACE LOGIC
                         if (items.size > 1) {
+                            val jumpToId = if (index > 0) items[index - 1].id else items[index + 1].id
                             items.removeAt(index)
                             saveAll()
+                            focusRequesters[jumpToId]?.requestFocus()
+                        } else {
+                            if (item.type != RowType.TEXT) {
+                                items[index] = items[index].copy(type = RowType.TEXT)
+                                saveAll()
+                            }
                         }
                     },
-                    onEnter = {
-                        val newItem = ChecklistItemData(
-                            id = System.currentTimeMillis().toString() + index,
-                            isChecked = false,
-                            text = ""
-                        )
-                        items.add(index + 1, newItem)
-                        saveAll()
+                    onEnter = { isTextEmpty ->
+                        // ENTER LOGIC
+                        if ((item.type == RowType.CHECKBOX || item.type == RowType.BULLET) && isTextEmpty) {
+                            // Enter on Empty Bullet/Check -> Delete line associated
+                            if (items.size > 1) {
+                                val jumpToId = if (index > 0) items[index - 1].id else items[index + 1].id
+                                items.removeAt(index)
+                                saveAll()
+                                focusRequesters[jumpToId]?.requestFocus()
+                            } else {
+                                items[index] = items[index].copy(type = RowType.TEXT)
+                                saveAll()
+                            }
+                        } else {
+                            // Standard Enter -> Create New Row of same type
+                            val newItem = HybridItemData(
+                                id = System.currentTimeMillis().toString() + index,
+                                type = item.type, // Copy type (Bullet->Bullet)
+                                text = ""
+                            )
+                            items.add(index + 1, newItem)
+                            saveAll()
+                        }
                     },
                     viewModel = viewModel,
                     cardId = cardId,
@@ -533,24 +596,25 @@ fun ChecklistEditor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChecklistRowItem(
+private fun HybridRowItem(
     initialHtml: String,
+    itemType: RowType,
     isChecked: Boolean,
+    focusRequester: FocusRequester,
+    onTypeChange: (RowType) -> Unit,
     onCheckedChange: (Boolean) -> Unit,
     onHtmlChange: (String) -> Unit,
-    onDelete: () -> Unit,
-    onEnter: () -> Unit,
+    onBackspace: () -> Unit,
+    onEnter: (Boolean) -> Unit,
     viewModel: CanvasViewModel,
     cardId: String,
     isLastItem: Boolean,
     onFocus: () -> Unit
 ) {
     val richTextState = rememberRichTextState()
-    val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { richTextState.setHtml(initialHtml) }
 
-    // Auto-focus new empty items
     LaunchedEffect(Unit) {
         if (initialHtml.isEmpty()) {
             delay(50)
@@ -559,37 +623,56 @@ private fun ChecklistRowItem(
     }
 
     Row(
-        // FIX 1: Align Top to prevent centering when text is multiline
         verticalAlignment = Alignment.Top,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
     ) {
-        Checkbox(
-            checked = isChecked,
-            onCheckedChange = onCheckedChange,
-            colors = CheckboxDefaults.colors(
-                checkedColor = MaterialTheme.colorScheme.primary,
-                uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            ),
-            modifier = Modifier
-                .size(32.dp)
-                // FIX 1.1: Push checkbox down slightly to match text baseline
-                .padding(top = 8.dp)
-        )
+        // RENDER CHECKBOX or BULLET
+        Box(
+            modifier = Modifier.padding(top = 10.dp, end = 8.dp).size(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            when (itemType) {
+                RowType.CHECKBOX -> {
+                    Checkbox(
+                        checked = isChecked,
+                        onCheckedChange = onCheckedChange,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                RowType.BULLET -> {
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                RowType.TEXT -> {
+                    // Empty for normal text
+                }
+            }
+        }
 
         Box(modifier = Modifier.weight(1f)) {
             RichTextEditor(
                 state = richTextState,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = if (isChecked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
-                    textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None,
-                    lineHeight = 24.sp // Enforce line height for better alignment
+                    color = if (isChecked && itemType == RowType.CHECKBOX)
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    else
+                        MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (isChecked && itemType == RowType.CHECKBOX)
+                        TextDecoration.LineThrough
+                    else
+                        TextDecoration.None,
+                    lineHeight = 24.sp
                 ),
-                // FIX 2: Handle Soft Keyboard "Enter" action
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(
-                    onNext = {
-                        onEnter()
-                    }
+                    onNext = { onEnter(richTextState.annotatedString.text.isEmpty()) }
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -598,24 +681,37 @@ private fun ChecklistRowItem(
                         if (focusState.isFocused) {
                             onFocus()
                             viewModel.activeCardId = cardId
+
+                            // 1. Hook up Styles
                             viewModel.onApplyStyle = { type, value ->
                                 handleToolbarAction(type, value, richTextState)
                                 onHtmlChange(richTextState.toHtml())
                             }
+
+                            // 2. Hook up Card Color
                             viewModel.onApplyCardColor = { color ->
                                 viewModel.updateCard(id = cardId, cardColor = color)
                             }
+
+                            // 3. FIX: Hook up "Insert List" button to toggle RowType
+                            viewModel.onInsertList = {
+                                val newType = if (itemType == RowType.BULLET) RowType.TEXT else RowType.BULLET
+                                onTypeChange(newType)
+                            }
+
                             syncToolbarState(viewModel, richTextState)
                         }
                     }
-                    // FIX 3: Handle Hardware/Software Backspace and Enter
                     .onKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown) {
-                            if (event.key == Key.Backspace && richTextState.annotatedString.isEmpty()) {
-                                onDelete()
+                            // FIX: Use .text.isEmpty() to ignore hidden formatting tags
+                            val isEmpty = richTextState.annotatedString.text.isEmpty()
+
+                            if (event.key == Key.Backspace && isEmpty) {
+                                onBackspace()
                                 true
                             } else if (event.key == Key.Enter) {
-                                onEnter()
+                                onEnter(richTextState.annotatedString.text.isEmpty())
                                 true
                             } else {
                                 false
@@ -631,29 +727,24 @@ private fun ChecklistRowItem(
                     textColor = MaterialTheme.colorScheme.onSurface,
                     placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 ),
-                placeholder = { if (isLastItem) Text("List item...") }
+                placeholder = {
+                    if (isLastItem && itemType == RowType.TEXT) Text("Type something...")
+                    else if (isLastItem) Text("List item...")
+                }
             )
         }
     }
 
-    // Safety check: if user managed to insert a newline manually, trigger enter
+    // Safety sync
     LaunchedEffect(richTextState.annotatedString) {
         val currentHtml = richTextState.toHtml()
         if (richTextState.annotatedString.text.contains('\n')) {
-            // Strip the newline and trigger enter
             val cleanText = richTextState.annotatedString.text.replace("\n", "")
             richTextState.setText(cleanText)
-            onEnter()
+            onEnter(cleanText.isEmpty())
         } else if (currentHtml != initialHtml) {
             onHtmlChange(currentHtml)
         }
-    }
-}
-
-private fun serializeChecklist(items: List<ChecklistItemData>): String {
-    return items.joinToString("\n") { item ->
-        val prefix = if (item.isChecked) "☑ " else "☐ "
-        prefix + item.text
     }
 }
 
