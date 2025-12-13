@@ -6,20 +6,16 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,16 +25,19 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -55,7 +54,6 @@ import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
-import androidx.compose.ui.text.TextRange
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,66 +67,35 @@ fun CardView(
     var hasGainedFocus by remember { mutableStateOf(false) }
     var headerHeight by remember { mutableStateOf(0f) }
 
-    val richTextState = rememberRichTextState()
+    // DETECT CHECKLIST MODE
+    // If the content starts with a checkbox marker, we switch to Native Checklist Mode
+    val isChecklistMode = remember(card.content) {
+        card.content.trimStart().startsWith("☐") || card.content.trimStart().startsWith("☑")
+    }
 
+    val richTextState = rememberRichTextState()
+    var layoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
     var titleFieldValue by remember(card.id) {
         mutableStateOf(TextFieldValue(text = card.title ?: ""))
     }
 
-    // Sync content changes to ViewModel
-    // KEY FIX: Listen to 'card.content' so we react when ViewModel restores old state
+    // Sync content changes to ViewModel (Only for RichText Mode)
     LaunchedEffect(card.content) {
-        if (richTextState.toHtml() != card.content) {
+        if (!isChecklistMode && richTextState.toHtml() != card.content) {
             richTextState.setHtml(card.content)
         }
     }
 
     LaunchedEffect(richTextState.annotatedString) {
-        val currentHtml = richTextState.toHtml()
-        if (currentHtml != card.content) {
-            viewModel.updateCard(
-                id = card.id,
-                content = currentHtml,
-                spans = emptyList(),
-                saveHistory = false // Don't save history on every character type
-            )
-        }
-    }
-
-    // Sync Toolbar State & Handle Checkbox Taps
-    LaunchedEffect(richTextState.selection, richTextState.annotatedString) {
-        if (isFocused) {
-            syncToolbarState(viewModel, richTextState)
-            
-            // Checkbox Toggle Logic (Safe)
-            try {
-                val selection = richTextState.selection
-                if (selection.collapsed) {
-                    val text = richTextState.annotatedString.text
-                    val cursor = selection.min
-                    
-                    if (cursor > 0 && cursor <= text.length) {
-                        // Find line start
-                        val lineStart = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
-                        
-                        // Check if cursor is exactly at lineStart+1 or lineStart+2 (inside the 2-char box)
-                        if (cursor >= lineStart && cursor <= lineStart + 2) {
-                            val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
-                            if (lineEnd >= lineStart + 2) {
-                                val lineSub = text.substring(lineStart, lineStart + 2)
-                                if (lineSub == "☐ " || lineSub == "☑ ") {
-                                     if (cursor < lineStart + 2) {
-                                         // Manual action (checkbox toggle) should save history
-                                         viewModel.saveSnapshot(card.id)
-                                         handleToolbarAction(SpanType.CHECKBOX, null, richTextState)
-                                     }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore transient errors
+        if (!isChecklistMode) {
+            val currentHtml = richTextState.toHtml()
+            if (currentHtml != card.content) {
+                viewModel.updateCard(
+                    id = card.id,
+                    content = currentHtml,
+                    spans = emptyList(),
+                    saveHistory = false
+                )
             }
         }
     }
@@ -191,12 +158,12 @@ fun CardView(
 
                         detectDragGestures(
                             onDragStart = {
-                                viewModel.saveSnapshot(currentCard.id) // Save state before drag starts
+                                viewModel.saveSnapshot(currentCard.id)
                                 startX = currentCard.x
                                 startY = currentCard.y
                                 accumDragX = 0f
                                 accumDragY = 0f
-                                viewModel.activeCardId = currentCard.id // Set active on drag
+                                viewModel.activeCardId = currentCard.id
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
@@ -206,7 +173,7 @@ fun CardView(
                                     id = currentCard.id,
                                     x = startX + accumDragX,
                                     y = startY + accumDragY,
-                                    saveHistory = false // Continuous update
+                                    saveHistory = false
                                 )
                             }
                         )
@@ -221,15 +188,13 @@ fun CardView(
                     BasicTextField(
                         value = titleFieldValue,
                         onValueChange = { newValue ->
-                            // If title changes, checking if it's a new "edit session" is hard here
-                            // We rely on focus listener to save snapshot before edits
                             titleFieldValue = newValue
                             viewModel.updateCard(id = card.id, title = newValue.text, saveHistory = false)
                         },
                         textStyle = MaterialTheme.typography.titleLarge.copy(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 28.sp // Explicit size override if needed, but family comes from theme
+                            fontSize = 28.sp
                         ),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
                         modifier = Modifier
@@ -238,7 +203,7 @@ fun CardView(
                             .onFocusChanged { focusState ->
                                 if (focusState.isFocused) {
                                     viewModel.activeCardId = card.id
-                                    viewModel.saveSnapshot(card.id) // Save state before title editing
+                                    viewModel.saveSnapshot(card.id)
                                 }
                             },
                         decorationBox = { innerTextField ->
@@ -267,106 +232,123 @@ fun CardView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(12.dp)
-                    .pointerInput(isEmpty, isFocused) {
-                        if (isEmpty || isFocused) {
-                            detectTapGestures(
-                                onTap = { offset ->
-                                    viewModel.focusPointY = card.y + offset.y + (headerHeight.takeIf { it > 0 } ?: 60f)
-                                    focusRequester.requestFocus()
-                                    keyboardController?.show()
-                                }
-                            )
-                        } else {
-                            detectTapGestures(
-                                onLongPress = { offset ->
-                                    viewModel.focusPointY = card.y + offset.y + (headerHeight.takeIf { it > 0 } ?: 60f)
-                                    focusRequester.requestFocus()
-                                    keyboardController?.show()
-                                },
-                                onTap = {}
-                            )
-                        }
-                    }
             ) {
-                RichTextEditor(
-                    state = richTextState,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                        .onFocusChanged { focusState ->
-                            isFocused = focusState.isFocused
-
-                            if (focusState.isFocused) {
-                                viewModel.activeCardId = card.id
-                                viewModel.saveSnapshot(card.id) // Save state before content editing
-                                hasGainedFocus = true
-                                keyboardController?.show()
-
-                                viewModel.onApplyStyle = { type, value ->
-                                    viewModel.saveSnapshot(card.id) // Save before applying style
-                                    handleToolbarAction(type, value, richTextState)
-                                }
-                                viewModel.onInsertList = {
-                                    viewModel.saveSnapshot(card.id) // Save before inserting list
-                                    richTextState.toggleUnorderedList()
-                                }
-                                viewModel.onApplyCardColor = { color ->
-                                    // Default updateCard saves history
-                                    viewModel.updateCard(id = card.id, cardColor = color)
-                                }
-
-                                syncToolbarState(viewModel, richTextState)
-                            } else {
-                                if (viewModel.onApplyStyle != null) {
-                                    viewModel.onApplyStyle = null
-                                    viewModel.onInsertList = null
-                                    viewModel.onApplyCardColor = null
-                                    viewModel.activeStyles.clear()
-                                }
-
-                                if (hasGainedFocus) {
-                                    viewModel.cleanupEmptyCard(card.id)
-                                }
-                            }
+                if (isChecklistMode) {
+                    // --- SAMSUNG STYLE CHECKLIST MODE ---
+                    ChecklistEditor(
+                        content = card.content,
+                        onContentChange = { newContent ->
+                            // Directly update content string (format: ☐ Item\n☑ Item)
+                            viewModel.updateCard(card.id, content = newContent, saveHistory = false)
                         },
-                    onTextLayout = { textLayoutResult ->
-                        if (isFocused) {
-                            val cursorIndex = richTextState.selection.end
-                            // Ensure index is within bounds
-                            val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
-                            val cursorRect = textLayoutResult.getCursorRect(clampedIndex)
-                            
-                            // Calculate absolute Y position of the cursor
-                            // Card Y + Header Height + Editor vertical Padding (12.dp) + Cursor Bottom
-                            val paddingPx = 12 * scale * 2.5f // Approximate padding in px, or better use Density
-                            // Actually, just use the card scale = 1f logic since we are passing scale.
-                            // But wait, the card logic uses dp.
-                            // Let's rely on standard density.
-                            
-                            // Safe fallback if headerHeight is 0
-                            val currentHeaderH = if (headerHeight > 0) headerHeight else 150f 
-                            
-                            // Note: We need to convert 12.dp to pixels for precision, but let's approximate or just rely on the flow.
-                            // Better: use LocalDensity
-                            
-                            val relativeCursorY = cursorRect.bottom 
-                            val totalY = card.y + currentHeaderH + relativeCursorY + 30f // +30f buffer for padding
-                            
-                            viewModel.focusPointY = totalY
+                        viewModel = viewModel, // Pass the VM
+                        cardId = card.id,
+                        onFocus = {
+                            // This runs when ANY checklist item gets clicked
+                            isFocused = true
+                            hasGainedFocus = true
                         }
-                    },
-                    colors = RichTextEditorDefaults.richTextEditorColors(
-                        containerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        textColor = MaterialTheme.colorScheme.onSurface,
-                        placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                    ),
-                    placeholder = { Text("Type something...") }
-                )
 
-                if (!isEmpty && !isFocused) {
+                    )
+                } else {
+                    // --- STANDARD RICH TEXT MODE ---
+                    // Wrapping in Box for pointer input to coexist with RichTextEditor
+                    Box(
+                        modifier = Modifier.pointerInput(isEmpty, isFocused) {
+                            if (isEmpty || isFocused) {
+                                detectTapGestures(
+                                    onTap = { offset ->
+                                        viewModel.focusPointY = card.y + offset.y + (headerHeight.takeIf { it > 0 } ?: 60f)
+                                        focusRequester.requestFocus()
+                                        keyboardController?.show()
+                                    }
+                                )
+                            } else {
+                                detectTapGestures(
+                                    onLongPress = { offset ->
+                                        viewModel.focusPointY = card.y + offset.y + (headerHeight.takeIf { it > 0 } ?: 60f)
+                                        focusRequester.requestFocus()
+                                        keyboardController?.show()
+                                    }
+                                )
+                            }
+                        }
+                    ) {
+                        RichTextEditor(
+                            state = richTextState,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { focusState ->
+                                    isFocused = focusState.isFocused
+
+                                    if (focusState.isFocused) {
+                                        viewModel.activeCardId = card.id
+                                        viewModel.saveSnapshot(card.id)
+                                        hasGainedFocus = true
+                                        keyboardController?.show()
+
+                                        viewModel.onApplyStyle = { type, value ->
+                                            if (type == SpanType.CHECKBOX) {
+                                                // SWITCH TO CHECKLIST MODE
+                                                // Convert current text to lines prefixed with ☐
+                                                val text = richTextState.annotatedString.text
+                                                val checklistContent = if (text.isEmpty()) "☐ " else text.lines().joinToString("\n") {
+                                                    if (it.startsWith("☐ ") || it.startsWith("☑ ")) it else "☐ $it"
+                                                }
+                                                viewModel.updateCard(card.id, content = checklistContent)
+                                            } else {
+                                                viewModel.saveSnapshot(card.id)
+                                                handleToolbarAction(type, value, richTextState)
+                                            }
+                                        }
+                                        viewModel.onInsertList = {
+                                            viewModel.saveSnapshot(card.id)
+                                            richTextState.toggleUnorderedList()
+                                        }
+                                        viewModel.onApplyCardColor = { color ->
+                                            viewModel.updateCard(id = card.id, cardColor = color)
+                                        }
+
+                                        syncToolbarState(viewModel, richTextState)
+                                    } else {
+                                        if (viewModel.onApplyStyle != null) {
+                                            viewModel.onApplyStyle = null
+                                            viewModel.onInsertList = null
+                                            viewModel.onApplyCardColor = null
+                                            viewModel.activeStyles.clear()
+                                        }
+                                        if (hasGainedFocus) {
+                                            viewModel.cleanupEmptyCard(card.id)
+                                        }
+                                    }
+                                },
+                            onTextLayout = { textLayoutResult ->
+                                layoutResult = textLayoutResult
+                                if (isFocused) {
+                                    val cursorIndex = richTextState.selection.end
+                                    val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
+                                    val cursorRect = textLayoutResult.getCursorRect(clampedIndex)
+                                    val currentHeaderH = if (headerHeight > 0) headerHeight else 150f
+                                    val relativeCursorY = cursorRect.bottom
+                                    val totalY = card.y + currentHeaderH + relativeCursorY + 30f
+                                    viewModel.focusPointY = totalY
+                                }
+                            },
+                            colors = RichTextEditorDefaults.richTextEditorColors(
+                                containerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                textColor = MaterialTheme.colorScheme.onSurface,
+                                placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                            ),
+                            placeholder = { Text("Type something...") }
+                        )
+                    }
+                }
+
+                if (!isEmpty && !isFocused && !isChecklistMode) {
                     Box(
                         modifier = Modifier
                             .matchParentSize()
@@ -387,7 +369,6 @@ fun CardView(
 
         if (isFocused) {
             var showDeleteDialog by remember { mutableStateOf(false) }
-
             if (showDeleteDialog) {
                 AlertDialog(
                     onDismissRequest = { showDeleteDialog = false },
@@ -399,15 +380,11 @@ fun CardView(
                                 viewModel.removeCard(card.id)
                                 showDeleteDialog = false
                             },
-                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Delete")
-                        }
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) { Text("Delete") }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showDeleteDialog = false }) {
-                            Text("Cancel")
-                        }
+                        TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
                     }
                 )
             }
@@ -444,20 +421,19 @@ fun CardView(
                 .pointerInput(density) {
                     var startWidth = 0f
                     var accumDragX = 0f
-
                     detectDragGestures(
                         onDragStart = {
-                            viewModel.saveSnapshot(currentCard.id) // Save before resize
+                            viewModel.saveSnapshot(currentCard.id)
                             startWidth = currentCard.width
                             accumDragX = 0f
-                            viewModel.activeCardId = currentCard.id // Set active on resize
+                            viewModel.activeCardId = currentCard.id
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val dragAmountDp = dragAmount.x / density.density
                             accumDragX += dragAmountDp
                             viewModel.updateCard(
-                                id = currentCard.id, 
+                                id = currentCard.id,
                                 width = startWidth + accumDragX,
                                 saveHistory = false
                             )
@@ -476,26 +452,224 @@ fun CardView(
     }
 }
 
+// --- CHECKLIST IMPLEMENTATION ---
+
+// --- SAMSUNG STYLE CHECKLIST MODE ---
+
+// --- SAMSUNG STYLE CHECKLIST MODE ---
+
+data class ChecklistItemData(
+    val id: String,
+    val isChecked: Boolean,
+    val text: String
+)
+
+@Composable
+fun ChecklistEditor(
+    content: String,
+    onContentChange: (String) -> Unit,
+    viewModel: CanvasViewModel,
+    cardId: String,
+    onFocus: () -> Unit
+) {
+    // 1. Parse content
+    val initialItems = remember(content) {
+        val lines = content.split('\n')
+        lines.mapIndexed { index, line ->
+            val isChecked = line.startsWith("☑")
+            val cleanHtml = line.removePrefix("☐ ").removePrefix("☑ ")
+            ChecklistItemData(index.toString(), isChecked, cleanHtml)
+        }
+    }
+
+    val items = remember { mutableStateListOf<ChecklistItemData>().apply { addAll(initialItems) } }
+
+    fun saveAll() {
+        val fullContent = items.joinToString("\n") { item ->
+            val prefix = if (item.isChecked) "☑ " else "☐ "
+            prefix + item.text
+        }
+        onContentChange(fullContent)
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        items.forEachIndexed { index, item ->
+            key(item.id) {
+                ChecklistRowItem(
+                    initialHtml = item.text,
+                    isChecked = item.isChecked,
+                    onCheckedChange = { checked ->
+                        items[index] = items[index].copy(isChecked = checked)
+                        saveAll()
+                    },
+                    onHtmlChange = { newHtml ->
+                        items[index] = items[index].copy(text = newHtml)
+                        saveAll()
+                    },
+                    onDelete = {
+                        if (items.size > 1) {
+                            items.removeAt(index)
+                            saveAll()
+                        }
+                    },
+                    onEnter = {
+                        val newItem = ChecklistItemData(
+                            id = System.currentTimeMillis().toString() + index,
+                            isChecked = false,
+                            text = ""
+                        )
+                        items.add(index + 1, newItem)
+                        saveAll()
+                    },
+                    viewModel = viewModel,
+                    cardId = cardId,
+                    isLastItem = index == items.lastIndex,
+                    onFocus = onFocus
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChecklistRowItem(
+    initialHtml: String,
+    isChecked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onHtmlChange: (String) -> Unit,
+    onDelete: () -> Unit,
+    onEnter: () -> Unit,
+    viewModel: CanvasViewModel,
+    cardId: String,
+    isLastItem: Boolean,
+    onFocus: () -> Unit
+) {
+    val richTextState = rememberRichTextState()
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) { richTextState.setHtml(initialHtml) }
+
+    // Auto-focus new empty items
+    LaunchedEffect(Unit) {
+        if (initialHtml.isEmpty()) {
+            delay(50)
+            focusRequester.requestFocus()
+        }
+    }
+
+    Row(
+        // FIX 1: Align Top to prevent centering when text is multiline
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Checkbox(
+            checked = isChecked,
+            onCheckedChange = onCheckedChange,
+            colors = CheckboxDefaults.colors(
+                checkedColor = MaterialTheme.colorScheme.primary,
+                uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            ),
+            modifier = Modifier
+                .size(32.dp)
+                // FIX 1.1: Push checkbox down slightly to match text baseline
+                .padding(top = 8.dp)
+        )
+
+        Box(modifier = Modifier.weight(1f)) {
+            RichTextEditor(
+                state = richTextState,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = if (isChecked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None,
+                    lineHeight = 24.sp // Enforce line height for better alignment
+                ),
+                // FIX 2: Handle Soft Keyboard "Enter" action
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(
+                    onNext = {
+                        onEnter()
+                    }
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused) {
+                            onFocus()
+                            viewModel.activeCardId = cardId
+                            viewModel.onApplyStyle = { type, value ->
+                                handleToolbarAction(type, value, richTextState)
+                                onHtmlChange(richTextState.toHtml())
+                            }
+                            viewModel.onApplyCardColor = { color ->
+                                viewModel.updateCard(id = cardId, cardColor = color)
+                            }
+                            syncToolbarState(viewModel, richTextState)
+                        }
+                    }
+                    // FIX 3: Handle Hardware/Software Backspace and Enter
+                    .onKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown) {
+                            if (event.key == Key.Backspace && richTextState.annotatedString.isEmpty()) {
+                                onDelete()
+                                true
+                            } else if (event.key == Key.Enter) {
+                                onEnter()
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    },
+                colors = RichTextEditorDefaults.richTextEditorColors(
+                    containerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    textColor = MaterialTheme.colorScheme.onSurface,
+                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                ),
+                placeholder = { if (isLastItem) Text("List item...") }
+            )
+        }
+    }
+
+    // Safety check: if user managed to insert a newline manually, trigger enter
+    LaunchedEffect(richTextState.annotatedString) {
+        val currentHtml = richTextState.toHtml()
+        if (richTextState.annotatedString.text.contains('\n')) {
+            // Strip the newline and trigger enter
+            val cleanText = richTextState.annotatedString.text.replace("\n", "")
+            richTextState.setText(cleanText)
+            onEnter()
+        } else if (currentHtml != initialHtml) {
+            onHtmlChange(currentHtml)
+        }
+    }
+}
+
+private fun serializeChecklist(items: List<ChecklistItemData>): String {
+    return items.joinToString("\n") { item ->
+        val prefix = if (item.isChecked) "☑ " else "☐ "
+        prefix + item.text
+    }
+}
+
+// ... (Rest of existing helper functions like handleToolbarAction, getParagraphBounds etc.)
+// KEEP EXISTING HELPER FUNCTIONS HERE
 private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextState) {
     when (type) {
         SpanType.BOLD -> state.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
         SpanType.ITALIC -> state.toggleSpanStyle(SpanStyle(fontStyle = FontStyle.Italic))
         SpanType.UNDERLINE -> state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.Underline))
         SpanType.STRIKETHROUGH -> state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-
         SpanType.ALIGN_LEFT -> state.toggleParagraphStyle(ParagraphStyle(textAlign = TextAlign.Left))
         SpanType.ALIGN_CENTER -> state.toggleParagraphStyle(ParagraphStyle(textAlign = TextAlign.Center))
         SpanType.ALIGN_RIGHT -> state.toggleParagraphStyle(ParagraphStyle(textAlign = TextAlign.Right))
-
         SpanType.CODE -> state.toggleCodeSpan()
-
-        SpanType.QUOTE -> {
-            state.toggleSpanStyle(SpanStyle(
-                background = Color.Gray.copy(alpha = 0.2f),
-                fontStyle = FontStyle.Italic
-            ))
-        }
-
+        SpanType.QUOTE -> state.toggleSpanStyle(SpanStyle(background = Color.Gray.copy(alpha = 0.2f), fontStyle = FontStyle.Italic))
         SpanType.LINK -> {
             if (value != null) {
                 val selection = state.selection
@@ -507,113 +681,47 @@ private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextS
                 state.addLink(text = selectedText, url = value)
             }
         }
-
-        SpanType.CHECKBOX -> {
-            val text = state.annotatedString.text
-            val selection = state.selection
-
-            val lineStart = text.lastIndexOf('\n', selection.min - 1).let { if (it == -1) 0 else it + 1 }
-            val lineEnd = text.indexOf('\n', selection.max).let { if (it == -1) text.length else it }
-            val lineText = text.substring(lineStart, lineEnd)
-
-            if (lineText.startsWith("☐ ")) {
-                val current = state.annotatedString
-                val prefix = current.subSequence(0, lineStart)
-                val suffix = current.subSequence(lineStart + 2, current.length)
-                val newContent = prefix + AnnotatedString("☑ ") + suffix
-
-                updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd))
-                state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-                
-                state.selection = androidx.compose.ui.text.TextRange(lineEnd)
-
-            } else if (lineText.startsWith("☑ ")) {
-                val current = state.annotatedString
-                val prefix = current.subSequence(0, lineStart)
-                val suffix = current.subSequence(lineStart + 2, current.length)
-                val newContent = prefix + AnnotatedString("☐ ") + suffix
-
-                updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineStart + 2, lineEnd))
-                state.toggleSpanStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-                
-                state.selection = androidx.compose.ui.text.TextRange(lineEnd)
-
-            } else {
-                val current = state.annotatedString
-                val prefix = current.subSequence(0, lineStart)
-                val suffix = current.subSequence(lineStart, current.length)
-                val newContent = prefix + AnnotatedString("☐ ") + suffix
-
-                updateRichTextState(state, newContent, androidx.compose.ui.text.TextRange(lineEnd + 2))
-            }
-        }
-
-        SpanType.TEXT_COLOR -> {
-            value?.toLongOrNull()?.let { colorLong ->
-                state.toggleSpanStyle(SpanStyle(color = Color(colorLong.toULong())))
-            }
-        }
-
-        SpanType.BG_COLOR -> {
-            value?.toLongOrNull()?.let { colorLong ->
-                state.toggleSpanStyle(SpanStyle(background = Color(colorLong.toULong())))
-            }
-        }
-
-        SpanType.FONT_SIZE -> {
-            value?.toFloatOrNull()?.let { size ->
-                state.toggleSpanStyle(SpanStyle(fontSize = size.sp))
-            }
-        }
+        // Checkbox is now handled via mode switching, but we keep this for legacy or mixed text support
+        SpanType.CHECKBOX -> { /* Handled in lambda now */ }
+        SpanType.TEXT_COLOR -> value?.toLongOrNull()?.let { state.toggleSpanStyle(SpanStyle(color = Color(it.toULong()))) }
+        SpanType.BG_COLOR -> value?.toLongOrNull()?.let { state.toggleSpanStyle(SpanStyle(background = Color(it.toULong()))) }
+        SpanType.FONT_SIZE -> value?.toFloatOrNull()?.let { state.toggleSpanStyle(SpanStyle(fontSize = it.sp)) }
     }
+}
+
+private fun getParagraphBounds(state: RichTextState): Pair<Int, Int> {
+    val text = state.annotatedString.text
+    val selection = state.selection
+    val cursor = selection.min
+    val paragraph = state.annotatedString.paragraphStyles.firstOrNull { style -> cursor >= style.start && cursor <= style.end }
+    if (paragraph != null) return paragraph.start to paragraph.end
+    val start = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
+    val end = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+    return start to end
 }
 
 private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
     viewModel.activeStyles.clear()
     val currentSpan = state.currentSpanStyle
     val currentParagraph = state.currentParagraphStyle
-
     if (currentSpan.fontWeight == FontWeight.Bold) viewModel.activeStyles[SpanType.BOLD] = null
     if (currentSpan.fontStyle == FontStyle.Italic) viewModel.activeStyles[SpanType.ITALIC] = null
-    if (TextDecoration.Underline in (currentSpan.textDecoration ?: TextDecoration.None)) {
-        viewModel.activeStyles[SpanType.UNDERLINE] = null
-    }
-    if (TextDecoration.LineThrough in (currentSpan.textDecoration ?: TextDecoration.None)) {
-        viewModel.activeStyles[SpanType.STRIKETHROUGH] = null
-    }
-
+    if (TextDecoration.Underline in (currentSpan.textDecoration ?: TextDecoration.None)) viewModel.activeStyles[SpanType.UNDERLINE] = null
+    if (TextDecoration.LineThrough in (currentSpan.textDecoration ?: TextDecoration.None)) viewModel.activeStyles[SpanType.STRIKETHROUGH] = null
     when (currentParagraph.textAlign) {
         TextAlign.Left -> viewModel.activeStyles[SpanType.ALIGN_LEFT] = null
         TextAlign.Center -> viewModel.activeStyles[SpanType.ALIGN_CENTER] = null
         TextAlign.Right -> viewModel.activeStyles[SpanType.ALIGN_RIGHT] = null
         else -> {}
     }
-
-    if (currentSpan.color != Color.Unspecified) {
-        viewModel.activeStyles[SpanType.TEXT_COLOR] = currentSpan.color.value.toString()
-    }
-    if (currentSpan.background != Color.Unspecified) {
-        viewModel.activeStyles[SpanType.BG_COLOR] = currentSpan.background.value.toString()
-    }
-    if (currentSpan.fontSize != TextUnit.Unspecified) {
-        viewModel.activeStyles[SpanType.FONT_SIZE] = currentSpan.fontSize.value.toString()
-    }
+    if (currentSpan.color != Color.Unspecified) viewModel.activeStyles[SpanType.TEXT_COLOR] = currentSpan.color.value.toString()
+    if (currentSpan.background != Color.Unspecified) viewModel.activeStyles[SpanType.BG_COLOR] = currentSpan.background.value.toString()
+    if (currentSpan.fontSize != TextUnit.Unspecified) viewModel.activeStyles[SpanType.FONT_SIZE] = currentSpan.fontSize.value.toString()
 }
 
 private fun updateRichTextState(state: RichTextState, content: AnnotatedString, selection: androidx.compose.ui.text.TextRange) {
+    // Keep existing reflection hacks if needed
     val newValue = TextFieldValue(content, selection)
-    
-    val methodNames = listOf("onTextFieldValueChange", "onValueChange", "updateTextFieldValue")
-    for (name in methodNames) {
-        try {
-            val method = state::class.java.getDeclaredMethod(name, TextFieldValue::class.java)
-            method.isAccessible = true
-            method.invoke(state, newValue)
-            return
-        } catch (e: Exception) {
-        }
-    }
-
     try {
         val field = state::class.java.getDeclaredField("_textFieldValue")
         field.isAccessible = true
@@ -623,9 +731,4 @@ private fun updateRichTextState(state: RichTextState, content: AnnotatedString, 
     } catch (e: Exception) {
         e.printStackTrace()
     }
-}
-
-private fun safeSubsequence(text: String, start: Int, end: Int): String {
-    if (start < 0 || end > text.length || start > end) return ""
-    return text.substring(start, end)
 }
