@@ -15,9 +15,15 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -27,7 +33,7 @@ import com.akinalpfdn.typewall.model.SpanType
 import kotlin.math.roundToInt
 
 // Enum to track which toolbar sub-menu is open
-enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR, FONT_SIZE }
+enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR }
 
 
 @Composable
@@ -64,7 +70,26 @@ fun MainToolbar(
         // --- Color & Size Group ---
         ToolbarIcon(Icons.Default.FormatColorText, false) { onOpenMode(ToolbarMode.TEXT_COLOR) }
         ToolbarIcon(Icons.Default.FormatColorFill, false) { onOpenMode(ToolbarMode.BG_COLOR) }
-        ToolbarIcon(Icons.Default.FormatSize, false) { onOpenMode(ToolbarMode.FONT_SIZE) }
+        
+        // Font Size Wheel Picker
+        Box {
+            var showFontSizeMenu by remember { mutableStateOf(false) }
+            // Get current font size if possible, or default to 16
+            // We'll just pass 16 for now or need to track it in ViewModel if we want persistence across closing menu
+            val initialSize = viewModel.activeStyles[SpanType.FONT_SIZE]?.toFloatOrNull()?.toInt() ?: 16
+            
+            ToolbarIcon(Icons.Default.FormatSize, false) { showFontSizeMenu = true }
+            
+            if (showFontSizeMenu) {
+                FontSizeWheelPicker(
+                    initialSize = initialSize,
+                    onSizeSelected = { size ->
+                        viewModel.onApplyStyle?.invoke(SpanType.FONT_SIZE, size.toString())
+                    },
+                    onDismiss = { showFontSizeMenu = false }
+                )
+            }
+        }
 
         VerticalDivider()
 
@@ -196,59 +221,6 @@ fun ColorPalette(
     }
 }
 
-@Composable
-fun FontSizeSelector(
-    onSelect: (Int) -> Unit,
-    onBack: () -> Unit
-) {
-    val sizes = listOf(12, 14, 16, 18, 20, 24, 32)
-    Row(
-        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
-        }
-        sizes.forEach { size ->
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (size == 16) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surface
-                    )
-                    .clickable { onSelect(size) }
-            ) {
-                Text(
-                    text = "${size}sp",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (size == 16) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ToolbarButton(icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
-    val tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val bg = if (isActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(40.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg, RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-    ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
-    }
-}
-
 
 
 @Composable
@@ -277,6 +249,74 @@ fun CanvasControls(
             viewModel.offsetY = 0f
         }) {
             Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun FontSizeWheelPicker(
+    initialSize: Int,
+    onSizeSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sizes = (8..42).toList()
+    // Default to index of 16 if initialSize not found
+    val startIndex = sizes.indexOf(initialSize).takeIf { it != -1 } ?: sizes.indexOf(16)
+    
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = startIndex) { sizes.size }
+    
+    // Update selection as we scroll
+    LaunchedEffect(pagerState.currentPage) {
+        onSizeSelected(sizes[pagerState.currentPage])
+    }
+
+    androidx.compose.ui.window.Popup(
+        onDismissRequest = onDismiss,
+        alignment = Alignment.TopCenter,
+        offset = androidx.compose.ui.unit.IntOffset(0, 100) // Slight offset downwards
+    ) {
+        Box(
+            modifier = Modifier
+                .width(80.dp)
+                .height(150.dp)
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                .shadow(8.dp, RoundedCornerShape(12.dp))
+        ) {
+            // Selection Indicator
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+            )
+
+            androidx.compose.foundation.pager.VerticalPager(
+                state = pagerState,
+                pageSize = androidx.compose.foundation.pager.PageSize.Fixed(40.dp),
+                contentPadding = PaddingValues(vertical = 55.dp), // Center content: (150 - 40) / 2
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val size = sizes[page]
+                val isSelected = pagerState.currentPage == page
+                
+                // Simple Graphics Layer for "Wheel" effect could be added here
+                // For now, simple text centering
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${size}", // Just number for cleaner look in wheel
+                        style = if (isSelected) 
+                            MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        else 
+                            MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    )
+                }
+            }
         }
     }
 }

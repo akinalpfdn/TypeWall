@@ -151,10 +151,6 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                                 onSelect = { color -> viewModel.onApplyCardColor?.invoke(color.value.toLong()) },
                                 onBack = { toolbarMode = ToolbarMode.MAIN }
                             )
-                            ToolbarMode.FONT_SIZE -> FontSizeSelector(
-                                onSelect = { size -> viewModel.onApplyStyle?.invoke(SpanType.FONT_SIZE, size.toString()) },
-                                onBack = { toolbarMode = ToolbarMode.MAIN }
-                            )
                         }
                     }
                 }
