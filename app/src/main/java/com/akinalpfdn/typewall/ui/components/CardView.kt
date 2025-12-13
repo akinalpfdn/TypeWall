@@ -72,21 +72,22 @@ fun CardView(
         mutableStateOf(TextFieldValue(text = card.title ?: ""))
     }
 
-    // Load initial content
-    LaunchedEffect(card.id) {
+    // Sync content changes to ViewModel
+    // KEY FIX: Listen to 'card.content' so we react when ViewModel restores old state
+    LaunchedEffect(card.content) {
         if (richTextState.toHtml() != card.content) {
             richTextState.setHtml(card.content)
         }
     }
 
-    // Sync content changes to ViewModel
     LaunchedEffect(richTextState.annotatedString) {
         val currentHtml = richTextState.toHtml()
         if (currentHtml != card.content) {
             viewModel.updateCard(
                 id = card.id,
                 content = currentHtml,
-                spans = emptyList()
+                spans = emptyList(),
+                saveHistory = false // Don't save history on every character type
             )
         }
     }
@@ -114,6 +115,8 @@ fun CardView(
                                 val lineSub = text.substring(lineStart, lineStart + 2)
                                 if (lineSub == "☐ " || lineSub == "☑ ") {
                                      if (cursor < lineStart + 2) {
+                                         // Manual action (checkbox toggle) should save history
+                                         viewModel.saveSnapshot(card.id)
                                          handleToolbarAction(SpanType.CHECKBOX, null, richTextState)
                                      }
                                 }
@@ -185,10 +188,12 @@ fun CardView(
 
                         detectDragGestures(
                             onDragStart = {
+                                viewModel.saveSnapshot(currentCard.id) // Save state before drag starts
                                 startX = currentCard.x
                                 startY = currentCard.y
                                 accumDragX = 0f
                                 accumDragY = 0f
+                                viewModel.activeCardId = currentCard.id // Set active on drag
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
@@ -197,7 +202,8 @@ fun CardView(
                                 viewModel.updateCard(
                                     id = currentCard.id,
                                     x = startX + accumDragX,
-                                    y = startY + accumDragY
+                                    y = startY + accumDragY,
+                                    saveHistory = false // Continuous update
                                 )
                             }
                         )
@@ -212,8 +218,10 @@ fun CardView(
                     BasicTextField(
                         value = titleFieldValue,
                         onValueChange = { newValue ->
+                            // If title changes, checking if it's a new "edit session" is hard here
+                            // We rely on focus listener to save snapshot before edits
                             titleFieldValue = newValue
-                            viewModel.updateCard(id = card.id, title = newValue.text)
+                            viewModel.updateCard(id = card.id, title = newValue.text, saveHistory = false)
                         },
                         textStyle = TextStyle(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
@@ -223,7 +231,13 @@ fun CardView(
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
                         modifier = Modifier
                             .weight(1f)
-                            .focusRequester(titleFocusRequester),
+                            .focusRequester(titleFocusRequester)
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    viewModel.activeCardId = card.id
+                                    viewModel.saveSnapshot(card.id) // Save state before title editing
+                                }
+                            },
                         decorationBox = { innerTextField ->
                             if (titleFieldValue.text.isEmpty()) {
                                 Text(
@@ -280,16 +294,21 @@ fun CardView(
                             isFocused = focusState.isFocused
 
                             if (focusState.isFocused) {
+                                viewModel.activeCardId = card.id
+                                viewModel.saveSnapshot(card.id) // Save state before content editing
                                 hasGainedFocus = true
                                 keyboardController?.show()
 
                                 viewModel.onApplyStyle = { type, value ->
+                                    viewModel.saveSnapshot(card.id) // Save before applying style
                                     handleToolbarAction(type, value, richTextState)
                                 }
                                 viewModel.onInsertList = {
+                                    viewModel.saveSnapshot(card.id) // Save before inserting list
                                     richTextState.toggleUnorderedList()
                                 }
                                 viewModel.onApplyCardColor = { color ->
+                                    // Default updateCard saves history
                                     viewModel.updateCard(id = card.id, cardColor = color)
                                 }
 
@@ -392,14 +411,20 @@ fun CardView(
 
                     detectDragGestures(
                         onDragStart = {
+                            viewModel.saveSnapshot(currentCard.id) // Save before resize
                             startWidth = currentCard.width
                             accumDragX = 0f
+                            viewModel.activeCardId = currentCard.id // Set active on resize
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val dragAmountDp = dragAmount.x / density.density
                             accumDragX += dragAmountDp
-                            viewModel.updateCard(id = currentCard.id, width = startWidth + accumDragX)
+                            viewModel.updateCard(
+                                id = currentCard.id, 
+                                width = startWidth + accumDragX,
+                                saveHistory = false
+                            )
                         }
                     )
                 },

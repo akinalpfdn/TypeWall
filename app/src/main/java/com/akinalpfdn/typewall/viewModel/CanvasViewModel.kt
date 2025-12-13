@@ -43,6 +43,91 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     init {
         loadCards()
     }
+    // --- Card-Based History Management ---
+    // Map<CardId, Stack<CardState>>
+    private val cardHistory = mutableStateMapOf<String, ArrayDeque<Card>>()
+    private val cardRedoStack = mutableStateMapOf<String, ArrayDeque<Card>>()
+    private val MAX_HISTORY_SIZE = 50
+
+    var activeCardId by mutableStateOf<String?>(null)
+
+    fun saveSnapshot(cardId: String) {
+        val currentCard = _cards.find { it.id == cardId } ?: return
+        
+        // Initialize stack if needed
+        if (!cardHistory.containsKey(cardId)) {
+            cardHistory[cardId] = ArrayDeque()
+        }
+        val historyStack = cardHistory[cardId]!!
+
+        // Deep copy
+        val snapshot = currentCard.copy()
+        
+        // Avoid duplicates
+        if (historyStack.isNotEmpty() && historyStack.last() == snapshot) return
+
+        historyStack.addLast(snapshot)
+        if (historyStack.size > MAX_HISTORY_SIZE) {
+            historyStack.removeFirst()
+        }
+        
+        // Clear redo stack for this card
+        cardRedoStack[cardId]?.clear()
+        
+        Log.d("CanvasViewModel", "Snapshot saved for card $cardId. Stack size: ${historyStack.size}")
+    }
+
+    fun undo() {
+        val cardId = activeCardId ?: return
+        val historyStack = cardHistory[cardId]
+        val redoStack = cardRedoStack.getOrPut(cardId) { ArrayDeque() }
+
+        if (!historyStack.isNullOrEmpty()) {
+            val currentCard = _cards.find { it.id == cardId } ?: return
+            
+            // Push current state to redo
+            redoStack.addLast(currentCard.copy())
+
+            // Pop previous state
+            val previousState = historyStack.removeLast()
+            
+            // Apply state
+            updateCardState(previousState)
+            
+            Log.d("CanvasViewModel", "Undo performed for card $cardId")
+        }
+    }
+
+    fun redo() {
+        val cardId = activeCardId ?: return
+        val historyStack = cardHistory.getOrPut(cardId) { ArrayDeque() }
+        val redoStack = cardRedoStack[cardId]
+
+        if (!redoStack.isNullOrEmpty()) {
+            val currentCard = _cards.find { it.id == cardId } ?: return
+            
+            // Push current to history
+            historyStack.addLast(currentCard.copy())
+
+            // Pop next state
+            val nextState = redoStack.removeLast()
+            
+            // Apply state
+            updateCardState(nextState)
+            
+            Log.d("CanvasViewModel", "Redo performed for card $cardId")
+        }
+    }
+
+    private fun updateCardState(newState: Card) {
+        val index = _cards.indexOfFirst { it.id == newState.id }
+        if (index != -1) {
+            _cards[index] = newState
+            saveCards()
+        }
+    }
+
+    // ---------------------------
 
     fun addCard(screenX: Float, screenY: Float) {
         // Convert screen coordinates to world coordinates
@@ -52,9 +137,8 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
         focusPointY = worldY
 
         // Center the card on the touch point (optional adjustment)
-        // You can adjust these values to fine-tune the positioning
-        val cardOffsetX = -125f // Half of default card width (250f)
-        val cardOffsetY = -20f  // Small offset to position the touch point in the upper part of the card
+        val cardOffsetX = -125f 
+        val cardOffsetY = -20f  
 
         val newCard = Card(
             x = worldX + cardOffsetX,
@@ -76,8 +160,13 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
         x: Float? = null,
         y: Float? = null,
         width: Float? = null,
-        cardColor: Long? = null
+        cardColor: Long? = null,
+        saveHistory: Boolean = true
     ) {
+        if (saveHistory) {
+            saveSnapshot(id)
+        }
+
         val index = _cards.indexOfFirst { it.id == id }
         if (index != -1) {
             val oldCard = _cards[index]
@@ -98,6 +187,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun removeCard(id: String) {
+        // No history for deletion as per request
         _cards.removeAll { it.id == id }
         saveCards()
     }

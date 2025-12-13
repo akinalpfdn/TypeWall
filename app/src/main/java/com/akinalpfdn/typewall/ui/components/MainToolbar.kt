@@ -48,8 +48,8 @@ fun MainToolbar(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         // --- History Group ---
-        ToolbarIcon(Icons.AutoMirrored.Filled.Undo, false) { /* Call Undo */ }
-        ToolbarIcon(Icons.AutoMirrored.Filled.Redo, false) { /* Call Redo */ }
+        ToolbarIcon(Icons.AutoMirrored.Filled.Undo, false) { viewModel.undo() }
+        ToolbarIcon(Icons.AutoMirrored.Filled.Redo, false) { viewModel.redo() }
 
         VerticalDivider()
 
