@@ -11,12 +11,15 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -382,8 +385,40 @@ fun CardView(
         }
 
         if (isFocused) {
+            var showDeleteDialog by remember { mutableStateOf(false) }
+
+            if (showDeleteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteDialog = false },
+                    title = { Text("Delete Card?") },
+                    text = { Text("This card has content. Are you sure you want to delete it?") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.removeCard(card.id)
+                                showDeleteDialog = false
+                            },
+                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
             IconButton(
-                onClick = { viewModel.removeCard(card.id) },
+                onClick = {
+                    if (!card.isVisuallyEmpty()) {
+                        showDeleteDialog = true
+                    } else {
+                        viewModel.removeCard(card.id)
+                    }
+                },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .size(32.dp)

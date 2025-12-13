@@ -11,7 +11,15 @@ data class Card(
     var title: String = "",
     var spans: List<CardSpan>? = emptyList(),
     var cardColor: Long? = null // ARGB Long
-)
+) {
+    fun isVisuallyEmpty(): Boolean {
+        // Strip HTML tags and zero-width spaces to check true emptiness
+        val plain = content.replace(Regex("<[^>]*>"), "")
+            .replace("&nbsp;", " ")
+            .trim()
+        return plain.isBlank() && title.isBlank()
+    }
+}
 
 data class CardSpan(
     val start: Int,
