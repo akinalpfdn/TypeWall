@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.test.isFocused
@@ -53,6 +54,8 @@ import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,6 +69,8 @@ fun CardView(
     var isFocused by remember { mutableStateOf(false) }
     var hasGainedFocus by remember { mutableStateOf(false) }
     var headerHeight by remember { mutableStateOf(0f) }
+    val scope = rememberCoroutineScope()
+    var blurJob by remember { mutableStateOf<Job?>(null) }
 
     // DETECT CHECKLIST MODE
     // If the content starts with a checkbox marker, we switch to Native Checklist Mode
@@ -245,16 +250,38 @@ fun CardView(
                         cardId = card.id,
                         onFocus = {
                             // This runs when ANY checklist item reports focus (e.g. programmatically)
+                            blurJob?.cancel()
                             isFocused = true
                             hasGainedFocus = true
                         },
+                        onBlur = {
+                            blurJob = scope.launch {
+                                delay(50)
+                                isFocused = false
+                                // Cleanup Logic (MATCHING STANDARD MODE)
+                                if (viewModel.onApplyStyle != null) {
+                                    viewModel.onApplyStyle = null
+                                    viewModel.onInsertList = null
+                                    viewModel.onApplyCardColor = null
+                                    viewModel.activeStyles.clear()
+                                }
+                                if (hasGainedFocus) {
+                                    viewModel.cleanupEmptyCard(card.id)
+                                }
+                            }
+                        },
                         isCardFocused = isFocused,
                         onRequestFocus = {
+                            blurJob?.cancel()
                             isFocused = true
                             hasGainedFocus = true
                             keyboardController?.show()
+                        },
+                        onScrollRequest = { offset ->
+                            val currentHeaderH = if (headerHeight > 0) headerHeight else 150f
+                            val totalY = card.y + currentHeaderH + offset + 30f
+                            viewModel.focusPointY = totalY
                         }
-
                     )
                 } else {
                     // --- STANDARD RICH TEXT MODE ---
@@ -342,6 +369,7 @@ fun CardView(
                                     viewModel.focusPointY = totalY
                                 }
                             },
+                                        
                             colors = RichTextEditorDefaults.richTextEditorColors(
                                 containerColor = Color.Transparent,
                                 focusedIndicatorColor = Color.Transparent,
@@ -488,8 +516,10 @@ fun ChecklistEditor(
     viewModel: CanvasViewModel,
     cardId: String,
     onFocus: () -> Unit,
+    onBlur: () -> Unit,
     isCardFocused: Boolean,
-    onRequestFocus: () -> Unit
+    onRequestFocus: () -> Unit,
+    onScrollRequest: (Float) -> Unit
 ) {
     // 1. Parse content into Hybrid Items
     val initialItems = remember(content) {
@@ -532,7 +562,13 @@ fun ChecklistEditor(
         onContentChange(fullContent)
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    var parentCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { parentCoordinates = it }
+    ) {
         items.forEachIndexed { index, item ->
             val itemFocusRequester = focusRequesters.getOrPut(item.id) { FocusRequester() }
 
@@ -596,8 +632,11 @@ fun ChecklistEditor(
                     cardId = cardId,
                     isLastItem = index == items.lastIndex,
                     onFocus = onFocus,
+                    onBlur = onBlur,
                     isCardFocused = isCardFocused,
-                    onRequestFocus = onRequestFocus
+                    onRequestFocus = onRequestFocus,
+                    parentCoordinates = parentCoordinates,
+                    onScrollRequest = onScrollRequest
                 )
             }
         }
@@ -620,12 +659,16 @@ private fun HybridRowItem(
     cardId: String,
     isLastItem: Boolean,
     onFocus: () -> Unit,
+    onBlur: () -> Unit,
     isCardFocused: Boolean,
-    onRequestFocus: () -> Unit
+    onRequestFocus: () -> Unit,
+    parentCoordinates: LayoutCoordinates?,
+    onScrollRequest: (Float) -> Unit
 ) {
     val richTextState = rememberRichTextState()
     val ZWSP = "\u200B"
     var lastTextValue by remember { mutableStateOf<String?>(null) } // Initialize as null to skip first trigger if needed
+    var myCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     LaunchedEffect(Unit) {
         if (initialHtml.isEmpty()) {
@@ -646,7 +689,10 @@ private fun HybridRowItem(
 
     Row(
         verticalAlignment = Alignment.Top,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .onGloballyPositioned { myCoordinates = it }
     ) {
         // RENDER CHECKBOX or BULLET
         Box(
@@ -699,6 +745,7 @@ private fun HybridRowItem(
                         onEnter(text.isEmpty() || text == ZWSP)
                     }
                 ),
+                enabled = isCardFocused,
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
@@ -725,8 +772,11 @@ private fun HybridRowItem(
                             }
 
                             syncToolbarState(viewModel, richTextState)
+                        } else {
+                            onBlur()
                         }
                     }
+                    .onGloballyPositioned { /* No-op, managed by row */ }
                     .onKeyEvent { event ->
                         // Keep distinct DELETE key support for hardware keyboards
                         if (event.type == KeyEventType.KeyDown && event.key == Key.Delete) {
@@ -745,12 +795,27 @@ private fun HybridRowItem(
                             false
                         }
                     },
+                onTextLayout = { textLayoutResult ->
+                    if (isCardFocused && parentCoordinates != null && myCoordinates != null && parentCoordinates.isAttached && myCoordinates!!.isAttached) {
+                        val cursorIndex = richTextState.selection.end
+                        val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
+                        val cursorRect = textLayoutResult.getCursorRect(clampedIndex)
+
+                        // Calculate relative Y
+                        val rowOffset = parentCoordinates!!.localPositionOf(myCoordinates!!, androidx.compose.ui.geometry.Offset.Zero).y
+                        val relativeCursorY = cursorRect.bottom + rowOffset
+                        onScrollRequest(relativeCursorY)
+                    }
+                },
                 colors = RichTextEditorDefaults.richTextEditorColors(
                     containerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
                     textColor = MaterialTheme.colorScheme.onSurface,
-                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )
 
             )
