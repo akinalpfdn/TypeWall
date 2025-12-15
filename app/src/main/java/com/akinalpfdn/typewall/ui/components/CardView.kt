@@ -45,6 +45,7 @@ import com.akinalpfdn.typewall.model.SpanType
 import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
 import com.mohamedrejeb.richeditor.model.RichTextState
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
 import kotlinx.coroutines.Job
@@ -724,13 +725,12 @@ private fun HybridRowItem(
         verticalAlignment = Alignment.Top,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
             .onGloballyPositioned { myCoordinates = it }
     ) {
         // --- Marker Column (Checkbox / Bullet) ---
         Box(
             modifier = Modifier
-                .padding(top = 10.dp, end = 8.dp)
+                .padding(top = 2.dp, end = 8.dp)
                 .size(24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -743,7 +743,7 @@ private fun HybridRowItem(
                             checkedColor = MaterialTheme.colorScheme.primary,
                             uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         ),
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
                 RowType.BULLET -> {
@@ -759,7 +759,7 @@ private fun HybridRowItem(
 
         // --- Text Editor Column ---
         Box(modifier = Modifier.weight(1f)) {
-            RichTextEditor(
+            BasicRichTextEditor(
                 state = richTextState,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
                     color = if (isChecked && itemType == RowType.CHECKBOX)
@@ -769,9 +769,9 @@ private fun HybridRowItem(
                     textDecoration = if (isChecked && itemType == RowType.CHECKBOX)
                         TextDecoration.LineThrough
                     else
-                        TextDecoration.None,
-                    lineHeight = 24.sp
+                        TextDecoration.None
                 ),
+                //cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(
                     onNext = {
@@ -823,17 +823,7 @@ private fun HybridRowItem(
                 onTextLayout = { textLayoutResult ->
                     currentLayoutResult = textLayoutResult
                     updateScrollPosition()
-                },
-                colors = RichTextEditorDefaults.richTextEditorColors(
-                    containerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    textColor = MaterialTheme.colorScheme.onSurface,
-                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
+                }
             )
 
             // Touch Overlay for View Mode

@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -138,7 +139,7 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                             )
                             ToolbarMode.TEXT_COLOR -> ColorPalette(
                                 title = "Text Color",
-                                onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.TEXT_COLOR, color.value.toString()) },
+                                onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.TEXT_COLOR, color.toArgb().toString()) },
                                 onBack = { toolbarMode = ToolbarMode.MAIN }
                             )/*
                             ToolbarMode.BG_COLOR -> ColorPalette(
