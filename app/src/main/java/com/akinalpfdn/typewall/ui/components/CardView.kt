@@ -596,16 +596,10 @@ fun ChecklistEditor(
                     },
                     onEnter = { isTextEmpty ->
                         if ((item.type == RowType.CHECKBOX || item.type == RowType.BULLET) && isTextEmpty) {
-                            // Enter on Empty Bullet/Check -> Delete line associated
-                            if (items.size > 1) {
-                                val jumpToId = if (index > 0) items[index - 1].id else items[index + 1].id
-                                items.removeAt(index)
-                                saveAll()
-                                focusRequesters[jumpToId]?.requestFocus()
-                            } else {
-                                items[index] = items[index].copy(type = RowType.TEXT)
-                                saveAll()
-                            }
+                            // Enter on Empty Bullet/Check -> Convert to Plain Text (in-place)
+                            // This matches "Empty Checkbox + Enter => make row normal richtext"
+                            items[index] = items[index].copy(type = RowType.TEXT)
+                            saveAll()
                         } else {
                             // Standard Enter -> Create New Row of same type
                             val newItem = HybridItemData(
@@ -804,8 +798,11 @@ private fun HybridRowItem(
                     containerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
                     textColor = MaterialTheme.colorScheme.onSurface,
-                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )
             )
 
