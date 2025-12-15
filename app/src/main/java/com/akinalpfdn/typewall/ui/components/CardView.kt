@@ -653,6 +653,7 @@ private fun HybridRowItem(
     var myCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val scope = rememberCoroutineScope()
     var currentLayoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    var isLocallyFocused by remember { mutableStateOf(false) }
 
     val updateScrollPosition = {
         val layoutResult = currentLayoutResult
@@ -683,6 +684,17 @@ private fun HybridRowItem(
         if (initialHtml.isEmpty()) {
             delay(50)
             focusRequester.requestFocus()
+        }
+    }
+
+    // Keep ViewModel callbacks fresh with latest itemType
+    LaunchedEffect(isLocallyFocused, itemType) {
+        if (isLocallyFocused) {
+            viewModel.activeCardId = cardId
+            viewModel.onInsertList = {
+                val newType = if (itemType == RowType.BULLET) RowType.TEXT else RowType.BULLET
+                onTypeChange(newType)
+            }
         }
     }
 
@@ -750,6 +762,7 @@ private fun HybridRowItem(
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
                     .onFocusChanged { focusState ->
+                        isLocallyFocused = focusState.isFocused
                         if (focusState.isFocused) {
                             onFocus()
                             viewModel.activeCardId = cardId
@@ -762,10 +775,7 @@ private fun HybridRowItem(
                             viewModel.onApplyCardColor = { color ->
                                 viewModel.updateCard(id = cardId, cardColor = color)
                             }
-                            viewModel.onInsertList = {
-                                val newType = if (itemType == RowType.BULLET) RowType.TEXT else RowType.BULLET
-                                onTypeChange(newType)
-                            }
+                            // onInsertList is handled in LaunchedEffect to capture dynamic itemType
 
                             syncToolbarState(viewModel, richTextState)
                             // Trigger scroll to cursor on focus gain
