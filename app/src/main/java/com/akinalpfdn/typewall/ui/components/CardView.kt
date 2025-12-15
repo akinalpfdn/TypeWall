@@ -904,8 +904,8 @@ private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextS
             }
         }
         SpanType.CHECKBOX -> { /* Handled via ViewModel state logic */ }
-        SpanType.TEXT_COLOR -> value?.toLongOrNull()?.let { state.toggleSpanStyle(SpanStyle(color = Color(it.toULong()))) }
-        SpanType.BG_COLOR -> value?.toLongOrNull()?.let { state.toggleSpanStyle(SpanStyle(background = Color(it.toULong()))) }
+        SpanType.TEXT_COLOR -> value?.toIntOrNull()?.let { state.toggleSpanStyle(SpanStyle(color = Color(it))) }
+        SpanType.BG_COLOR -> value?.toIntOrNull()?.let { state.toggleSpanStyle(SpanStyle(background = Color(it))) }
         SpanType.FONT_SIZE -> value?.toFloatOrNull()?.let { state.toggleSpanStyle(SpanStyle(fontSize = it.sp)) }
     }
 }
