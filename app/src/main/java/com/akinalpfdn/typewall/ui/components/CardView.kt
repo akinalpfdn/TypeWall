@@ -211,6 +211,7 @@ fun CardView(
                                 if (focusState.isFocused) {
                                     viewModel.activeCardId = card.id
                                     viewModel.saveSnapshot(card.id)
+                                    viewModel.focusPointY = card.y
                                 }
                             },
                         decorationBox = { innerTextField ->
@@ -311,7 +312,10 @@ fun CardView(
                     ) {
                         RichTextEditor(
                             state = richTextState,
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 24.sp
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(focusRequester)

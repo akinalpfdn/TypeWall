@@ -324,7 +324,8 @@ private fun HybridRowItem(
                     textDecoration = if (isChecked && itemType == RowType.CHECKBOX)
                         TextDecoration.LineThrough
                     else
-                        TextDecoration.None
+                        TextDecoration.None,
+                    fontSize = 24.sp
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
