@@ -695,6 +695,28 @@ private fun HybridRowItem(
                 val newType = if (itemType == RowType.BULLET) RowType.TEXT else RowType.BULLET
                 onTypeChange(newType)
             }
+            
+            // Handle Style Applications (including Checkbox toggle) with fresh itemType closure
+            viewModel.onApplyStyle = { type, value ->
+                if (type == SpanType.CHECKBOX) {
+                    val newType = if (itemType == RowType.CHECKBOX) RowType.TEXT else RowType.CHECKBOX
+                    onTypeChange(newType)
+                } else {
+                    handleToolbarAction(type, value, richTextState)
+                    onHtmlChange(richTextState.toHtml())
+                }
+            }
+            
+            // Sync toolbar state including custom Checkbox status
+            syncToolbarState(viewModel, richTextState)
+            if (itemType == RowType.CHECKBOX) {
+                viewModel.activeStyles[SpanType.CHECKBOX] = "true"
+            } else {
+                viewModel.activeStyles.remove(SpanType.CHECKBOX)
+            }
+            if (itemType == RowType.BULLET) { 
+                // Optionally highlight bullet icon? (Standard toolbar doesn't track this span-wise usually, but consistent behavior is good)
+            }
         }
     }
 
@@ -768,10 +790,8 @@ private fun HybridRowItem(
                             viewModel.activeCardId = cardId
 
                             // Link ViewModel actions to this specific editor instance
-                            viewModel.onApplyStyle = { type, value ->
-                                handleToolbarAction(type, value, richTextState)
-                                onHtmlChange(richTextState.toHtml())
-                            }
+                            // onApplyStyle is handled in LaunchedEffect to capture dynamic itemType
+
                             viewModel.onApplyCardColor = { color ->
                                 viewModel.updateCard(id = cardId, cardColor = color)
                             }
