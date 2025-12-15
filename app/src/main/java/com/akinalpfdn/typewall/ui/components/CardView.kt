@@ -657,6 +657,23 @@ private fun HybridRowItem(
     // Track previous text to detect specific deletions (like deleting the ZWSP)
     var lastTextValue by remember { mutableStateOf<String?>(null) }
     var myCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val scope = rememberCoroutineScope()
+    var currentLayoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+
+    val updateScrollPosition = {
+        val layoutResult = currentLayoutResult
+        if (layoutResult != null && isCardFocused && parentCoordinates != null && myCoordinates != null &&
+            parentCoordinates.isAttached && myCoordinates!!.isAttached) {
+            val cursorIndex = richTextState.selection.end
+            val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
+            val cursorRect = layoutResult.getCursorRect(clampedIndex)
+
+            // Calculate relative Y offset for scrolling
+            val rowOffset = parentCoordinates.localPositionOf(myCoordinates!!, androidx.compose.ui.geometry.Offset.Zero).y
+            val relativeCursorY = cursorRect.bottom + rowOffset
+            onScrollRequest(relativeCursorY)
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (initialHtml.isEmpty()) {
@@ -757,6 +774,8 @@ private fun HybridRowItem(
                             }
 
                             syncToolbarState(viewModel, richTextState)
+                            // Trigger scroll to cursor on focus gain
+                            updateScrollPosition()
                         } else {
                             onBlur()
                         }
@@ -778,17 +797,8 @@ private fun HybridRowItem(
                         }
                     },
                 onTextLayout = { textLayoutResult ->
-                    if (isCardFocused && parentCoordinates != null && myCoordinates != null &&
-                        parentCoordinates.isAttached && myCoordinates!!.isAttached) {
-                        val cursorIndex = richTextState.selection.end
-                        val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
-                        val cursorRect = textLayoutResult.getCursorRect(clampedIndex)
-
-                        // Calculate relative Y offset for scrolling
-                        val rowOffset = parentCoordinates!!.localPositionOf(myCoordinates!!, androidx.compose.ui.geometry.Offset.Zero).y
-                        val relativeCursorY = cursorRect.bottom + rowOffset
-                        onScrollRequest(relativeCursorY)
-                    }
+                    currentLayoutResult = textLayoutResult
+                    updateScrollPosition()
                 },
                 colors = RichTextEditorDefaults.richTextEditorColors(
                     containerColor = Color.Transparent,
@@ -808,7 +818,11 @@ private fun HybridRowItem(
                             detectTapGestures(
                                 onLongPress = {
                                     onRequestFocus()
-                                    focusRequester.requestFocus()
+                                    // Wait for recomposition to enable the editor
+                                    scope.launch {
+                                        delay(50) 
+                                        focusRequester.requestFocus()
+                                    }
                                 },
                                 onTap = { /* Swallow tap */ }
                             )
