@@ -280,8 +280,8 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
             }
             saveConnections()
             
-            // Chain: This card becomes the new start
-            connectionStartCardId = cardId
+            // Clear selection after connection
+            connectionStartCardId = null
         }
     }
 
