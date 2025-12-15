@@ -111,8 +111,10 @@ fun CardView(
 
     val focusRequester = remember { FocusRequester() }
     val titleFocusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
+    val keyboardController = LocalSoftwareKeyboardController.current 
+    var currentLayoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    
+    // Header height calculation for scrolling
     val isEmpty = card.content.isEmpty()
     // Ghost mode: Invisible if empty and not focused
     val isGhost = isEmpty && !isFocused
@@ -357,6 +359,7 @@ fun CardView(
                                     }
                                 },
                             onTextLayout = { textLayoutResult ->
+                                currentLayoutResult = textLayoutResult
                                 if (isFocused) {
                                     val cursorIndex = richTextState.selection.end
                                     val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
@@ -387,7 +390,17 @@ fun CardView(
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onLongPress = { offset ->
-                                        viewModel.focusPointY = card.y + offset.y + 60f
+                                        // 1. Calculate Cursor Position from Tap
+                                        currentLayoutResult?.let { layout ->
+                                            // The overlay matches parent size, but text might be padded or offset.
+                                            // RichTextEditor has no internal padding now (mostly), but let's be safe.
+                                            // Basic estimation: offset.y is relative to the Box, which matches the Editor.
+                                            val position = layout.getOffsetForPosition(offset)
+                                            richTextState.selection = androidx.compose.ui.text.TextRange(position)
+                                        }
+
+                                        // 2. Focus and Scroll
+                                        viewModel.focusPointY = card.y + offset.y + (headerHeight.takeIf { it > 0 } ?: 60f)
                                         focusRequester.requestFocus()
                                         keyboardController?.show()
                                     },
