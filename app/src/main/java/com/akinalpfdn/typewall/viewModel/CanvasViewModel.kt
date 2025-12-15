@@ -19,7 +19,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     private val _cards = mutableStateListOf<Card>()
     val cards: List<Card> get() = _cards
 
-    var scale by mutableStateOf(1f)
+    var scale by mutableStateOf(0.6f)
     var offsetX by mutableStateOf(0f)
     var offsetY by mutableStateOf(0f)
 

@@ -244,7 +244,7 @@ fun CanvasControls(
         }
         Box(modifier = Modifier.width(1.dp).height(20.dp).background(MaterialTheme.colorScheme.outline))
         IconButton(onClick = {
-            viewModel.scale = 1f
+            viewModel.scale = 0.6f
             viewModel.offsetX = 0f
             viewModel.offsetY = 0f
         }) {

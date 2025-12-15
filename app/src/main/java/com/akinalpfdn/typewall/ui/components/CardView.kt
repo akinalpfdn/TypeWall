@@ -5,9 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -27,15 +24,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.test.isFocused
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -53,9 +47,9 @@ import com.mohamedrejeb.richeditor.model.RichTextState
 import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,16 +64,18 @@ fun CardView(
     var hasGainedFocus by remember { mutableStateOf(false) }
     var headerHeight by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
+
+    // Focus management for checklist items
     var blurJob by remember { mutableStateOf<Job?>(null) }
 
-    // DETECT CHECKLIST MODE
-    // If the content starts with a checkbox marker, we switch to Native Checklist Mode
+    // Logic to switch between RichText Mode and Checklist Mode
+    // Check if the content starts with a checkbox marker (Stringly typed logic)
     val isChecklistMode = remember(card.content) {
-        card.content.trimStart().startsWith("☐") || card.content.trimStart().startsWith("☑")
+        val trimmed = card.content.trimStart()
+        trimmed.startsWith("☐") || trimmed.startsWith("☑")
     }
 
     val richTextState = rememberRichTextState()
-    var layoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
     var titleFieldValue by remember(card.id) {
         mutableStateOf(TextFieldValue(text = card.title ?: ""))
     }
@@ -105,6 +101,7 @@ fun CardView(
         }
     }
 
+    // Update local title state if external model changes
     LaunchedEffect(card.title) {
         if (titleFieldValue.text != (card.title ?: "")) {
             titleFieldValue = titleFieldValue.copy(text = card.title ?: "")
@@ -116,6 +113,7 @@ fun CardView(
     val keyboardController = LocalSoftwareKeyboardController.current
 
     val isEmpty = card.content.isEmpty()
+    // Ghost mode: Invisible if empty and not focused
     val isGhost = isEmpty && !isFocused
 
     val cardBgColor = if (card.cardColor != null) Color(card.cardColor!!.toULong()) else MaterialTheme.colorScheme.surface
@@ -123,6 +121,7 @@ fun CardView(
     val borderColor = if (isGhost) Color.Transparent else MaterialTheme.colorScheme.outlineVariant
     val shadowElevation = if (isGhost) 0.dp else if (isFocused) 8.dp else 2.dp
 
+    // Auto-focus new cards
     LaunchedEffect(Unit) {
         if (isEmpty) {
             focusRequester.requestFocus()
@@ -141,7 +140,7 @@ fun CardView(
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
     ) {
         Column {
-            // Header
+            // --- Header Section ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -232,33 +231,34 @@ fun CardView(
                 }
             }
 
-            // Editor
+            // --- Editor Section ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(12.dp)
             ) {
                 if (isChecklistMode) {
-                    // --- SAMSUNG STYLE CHECKLIST MODE ---
+                    // --- Checklist Mode ---
                     ChecklistEditor(
                         content = card.content,
                         onContentChange = { newContent ->
-                            // Directly update content string (format: ☐ Item\n☑ Item)
+                            // Update content directly (format: ☐ Item\n☑ Item)
                             viewModel.updateCard(card.id, content = newContent, saveHistory = false)
                         },
-                        viewModel = viewModel, // Pass the VM
+                        viewModel = viewModel,
                         cardId = card.id,
                         onFocus = {
-                            // This runs when ANY checklist item reports focus (e.g. programmatically)
+                            // Cancel any pending blur jobs when a child gains focus
                             blurJob?.cancel()
                             isFocused = true
                             hasGainedFocus = true
                         },
                         onBlur = {
+                            // Delay blur to check if focus moved to another item within the same card
                             blurJob = scope.launch {
                                 delay(50)
                                 isFocused = false
-                                // Cleanup Logic (MATCHING STANDARD MODE)
+                                // Cleanup Logic
                                 if (viewModel.onApplyStyle != null) {
                                     viewModel.onApplyStyle = null
                                     viewModel.onInsertList = null
@@ -284,8 +284,7 @@ fun CardView(
                         }
                     )
                 } else {
-                    // --- STANDARD RICH TEXT MODE ---
-                    // Wrapping in Box for pointer input to coexist with RichTextEditor
+                    // --- Standard Rich Text Mode ---
                     Box(
                         modifier = Modifier.pointerInput(isEmpty, isFocused) {
                             if (isEmpty || isFocused) {
@@ -324,8 +323,7 @@ fun CardView(
 
                                         viewModel.onApplyStyle = { type, value ->
                                             if (type == SpanType.CHECKBOX) {
-                                                // SWITCH TO CHECKLIST MODE
-                                                // Convert current text to lines prefixed with ☐
+                                                // SWITCH TO CHECKLIST MODE logic
                                                 val text = richTextState.annotatedString.text
                                                 val checklistContent = if (text.isEmpty()) "☐ " else text.lines().joinToString("\n") {
                                                     if (it.startsWith("☐ ") || it.startsWith("☑ ")) it else "☐ $it"
@@ -358,7 +356,6 @@ fun CardView(
                                     }
                                 },
                             onTextLayout = { textLayoutResult ->
-                                layoutResult = textLayoutResult
                                 if (isFocused) {
                                     val cursorIndex = richTextState.selection.end
                                     val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
@@ -369,7 +366,6 @@ fun CardView(
                                     viewModel.focusPointY = totalY
                                 }
                             },
-                                        
                             colors = RichTextEditorDefaults.richTextEditorColors(
                                 containerColor = Color.Transparent,
                                 focusedIndicatorColor = Color.Transparent,
@@ -382,6 +378,7 @@ fun CardView(
                     }
                 }
 
+                // Overlay to detect clicks when NOT focused and NOT in checklist mode
                 if (!isEmpty && !isFocused && !isChecklistMode) {
                     Box(
                         modifier = Modifier
@@ -401,6 +398,7 @@ fun CardView(
             }
         }
 
+        // --- Delete Button (Visible when focused) ---
         if (isFocused) {
             var showDeleteDialog by remember { mutableStateOf(false) }
             if (showDeleteDialog) {
@@ -445,7 +443,7 @@ fun CardView(
             }
         }
 
-        // Stretch Button
+        // --- Stretch/Resize Handle ---
         val density = LocalDensity.current
         Box(
             modifier = Modifier
@@ -486,17 +484,9 @@ fun CardView(
     }
 }
 
-// --- CHECKLIST IMPLEMENTATION ---
-
-// --- SAMSUNG STYLE CHECKLIST MODE ---
-
-// --- SAMSUNG STYLE CHECKLIST MODE ---
-
-// --- HYBRID EDITOR (SAMSUNG STYLE) ---
-
-// --- HYBRID EDITOR (SAMSUNG STYLE WITH FOCUS FIX) ---
-
-// --- HYBRID EDITOR (SAMSUNG STYLE: TEXT + CHECKBOX + BULLETS) ---
+// ---------------------------------------------------------
+// COMPONENT: CHECKLIST EDITOR
+// ---------------------------------------------------------
 
 data class HybridItemData(
     val id: String,
@@ -521,7 +511,7 @@ fun ChecklistEditor(
     onRequestFocus: () -> Unit,
     onScrollRequest: (Float) -> Unit
 ) {
-    // 1. Parse content into Hybrid Items
+    // Parse content into Hybrid Items
     val initialItems = remember(content) {
         val lines = content.split('\n')
         lines.mapIndexed { index, line ->
@@ -591,7 +581,7 @@ fun ChecklistEditor(
                         saveAll()
                     },
                     onBackspace = {
-                        // BACKSPACE LOGIC
+                        // Logic: If previous item exists, jump to it. Else if type is special, revert to text.
                         if (items.size > 1) {
                             val jumpToId = if (index > 0) items[index - 1].id else items[index + 1].id
                             items.removeAt(index)
@@ -605,7 +595,6 @@ fun ChecklistEditor(
                         }
                     },
                     onEnter = { isTextEmpty ->
-                        // ENTER LOGIC
                         if ((item.type == RowType.CHECKBOX || item.type == RowType.BULLET) && isTextEmpty) {
                             // Enter on Empty Bullet/Check -> Delete line associated
                             if (items.size > 1) {
@@ -621,7 +610,7 @@ fun ChecklistEditor(
                             // Standard Enter -> Create New Row of same type
                             val newItem = HybridItemData(
                                 id = System.currentTimeMillis().toString() + index,
-                                type = item.type, // Copy type (Bullet->Bullet)
+                                type = item.type,
                                 text = ""
                             )
                             items.add(index + 1, newItem)
@@ -630,7 +619,6 @@ fun ChecklistEditor(
                     },
                     viewModel = viewModel,
                     cardId = cardId,
-                    isLastItem = index == items.lastIndex,
                     onFocus = onFocus,
                     onBlur = onBlur,
                     isCardFocused = isCardFocused,
@@ -657,7 +645,6 @@ private fun HybridRowItem(
     onEnter: (Boolean) -> Unit,
     viewModel: CanvasViewModel,
     cardId: String,
-    isLastItem: Boolean,
     onFocus: () -> Unit,
     onBlur: () -> Unit,
     isCardFocused: Boolean,
@@ -667,7 +654,8 @@ private fun HybridRowItem(
 ) {
     val richTextState = rememberRichTextState()
     val ZWSP = "\u200B"
-    var lastTextValue by remember { mutableStateOf<String?>(null) } // Initialize as null to skip first trigger if needed
+    // Track previous text to detect specific deletions (like deleting the ZWSP)
+    var lastTextValue by remember { mutableStateOf<String?>(null) }
     var myCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     LaunchedEffect(Unit) {
@@ -694,9 +682,11 @@ private fun HybridRowItem(
             .padding(vertical = 2.dp)
             .onGloballyPositioned { myCoordinates = it }
     ) {
-        // RENDER CHECKBOX or BULLET
+        // --- Marker Column (Checkbox / Bullet) ---
         Box(
-            modifier = Modifier.padding(top = 10.dp, end = 8.dp).size(24.dp),
+            modifier = Modifier
+                .padding(top = 10.dp, end = 8.dp)
+                .size(24.dp),
             contentAlignment = Alignment.Center
         ) {
             when (itemType) {
@@ -718,12 +708,11 @@ private fun HybridRowItem(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                RowType.TEXT -> {
-                    // Empty for normal text
-                }
+                RowType.TEXT -> { /* Empty */ }
             }
         }
 
+        // --- Text Editor Column ---
         Box(modifier = Modifier.weight(1f)) {
             RichTextEditor(
                 state = richTextState,
@@ -754,18 +743,14 @@ private fun HybridRowItem(
                             onFocus()
                             viewModel.activeCardId = cardId
 
-                            // 1. Hook up Styles
+                            // Link ViewModel actions to this specific editor instance
                             viewModel.onApplyStyle = { type, value ->
                                 handleToolbarAction(type, value, richTextState)
                                 onHtmlChange(richTextState.toHtml())
                             }
-
-                            // 2. Hook up Card Color
                             viewModel.onApplyCardColor = { color ->
                                 viewModel.updateCard(id = cardId, cardColor = color)
                             }
-
-                            // 3. FIX: Hook up "Insert List" button to toggle RowType
                             viewModel.onInsertList = {
                                 val newType = if (itemType == RowType.BULLET) RowType.TEXT else RowType.BULLET
                                 onTypeChange(newType)
@@ -776,32 +761,30 @@ private fun HybridRowItem(
                             onBlur()
                         }
                     }
-                    .onGloballyPositioned { /* No-op, managed by row */ }
                     .onKeyEvent { event ->
-                        // Keep distinct DELETE key support for hardware keyboards
+                        // Hardware keyboard support
                         if (event.type == KeyEventType.KeyDown && event.key == Key.Delete) {
-                             val text = richTextState.annotatedString.text
-                             // If it contains only ZWSP or is empty, treat as empty
-                             if (text.isEmpty() || text == ZWSP) {
-                                 onBackspace()
-                                 true
-                             } else false
+                            val text = richTextState.annotatedString.text
+                            if (text.isEmpty() || text == ZWSP) {
+                                onBackspace()
+                                true
+                            } else false
                         } else if (event.type == KeyEventType.KeyDown && event.key == Key.Enter) {
-                             val text = richTextState.annotatedString.text
-                             // Treat ZWSP only as empty
-                             onEnter(text.isEmpty() || text == ZWSP)
-                             true
+                            val text = richTextState.annotatedString.text
+                            onEnter(text.isEmpty() || text == ZWSP)
+                            true
                         } else {
                             false
                         }
                     },
                 onTextLayout = { textLayoutResult ->
-                    if (isCardFocused && parentCoordinates != null && myCoordinates != null && parentCoordinates.isAttached && myCoordinates!!.isAttached) {
+                    if (isCardFocused && parentCoordinates != null && myCoordinates != null &&
+                        parentCoordinates.isAttached && myCoordinates!!.isAttached) {
                         val cursorIndex = richTextState.selection.end
                         val clampedIndex = cursorIndex.coerceIn(0, richTextState.annotatedString.length)
                         val cursorRect = textLayoutResult.getCursorRect(clampedIndex)
 
-                        // Calculate relative Y
+                        // Calculate relative Y offset for scrolling
                         val rowOffset = parentCoordinates!!.localPositionOf(myCoordinates!!, androidx.compose.ui.geometry.Offset.Zero).y
                         val relativeCursorY = cursorRect.bottom + rowOffset
                         onScrollRequest(relativeCursorY)
@@ -811,16 +794,12 @@ private fun HybridRowItem(
                     containerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
                     textColor = MaterialTheme.colorScheme.onSurface,
-                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )
-
             )
 
-            // Overlay to Intercept Touches when NOT focused (View Mode)
+            // Touch Overlay for View Mode
             if (!isCardFocused) {
                 Box(
                     modifier = Modifier
@@ -829,13 +808,9 @@ private fun HybridRowItem(
                             detectTapGestures(
                                 onLongPress = {
                                     onRequestFocus()
-                                    // Small delay to allow state update to remove overlay
-                                    // But usually requestFocus works immediately if component is composed
                                     focusRequester.requestFocus()
                                 },
-                                onTap = {
-                                    // Swallow tap to prevent keyboard opening
-                                }
+                                onTap = { /* Swallow tap */ }
                             )
                         }
                 )
@@ -843,20 +818,18 @@ private fun HybridRowItem(
         }
     }
 
-    // Safety sync and ZWSP Logic
+    // --- Logic Loop for ZWSP (Zero Width Space) & Updates ---
     LaunchedEffect(richTextState.annotatedString) {
         val currentText = richTextState.annotatedString.text
-        
-        // Skip if this is the initial set or no change relevant to our logic logic loop
+
         if (lastTextValue != null && currentText == lastTextValue) return@LaunchedEffect
 
-        // 1. Check for Backspace on Empty (Transition from ZWSP -> Empty)
+        // 1. Handle Backspace on Empty (User deleted ZWSP)
         if (currentText.isEmpty()) {
             if (lastTextValue == ZWSP) {
-                // User deleted the ZWSP -> trigger row deletion
                 onBackspace()
             } else {
-                // User cleared text ("a" -> "") -> Restore ZWSP
+                // User simply cleared text -> Restore ZWSP to keep field "active" logic
                 richTextState.setText(ZWSP)
                 lastTextValue = ZWSP
                 onHtmlChange("")
@@ -864,44 +837,39 @@ private fun HybridRowItem(
             return@LaunchedEffect
         }
 
-        // 2. Handle Newlines (Enter)
+        // 2. Handle Enter (Newlines)
         if (currentText.contains('\n')) {
             val cleanText = currentText.replace("\n", "").replace(ZWSP, "")
             richTextState.setText(if (cleanText.isEmpty()) ZWSP else cleanText)
             lastTextValue = if (cleanText.isEmpty()) ZWSP else cleanText
-            // If it was just ZWSP + Enter, cleanText is empty -> trigger Enter on Empty
             onEnter(cleanText.isEmpty())
             return@LaunchedEffect
         }
 
         // 3. User typed text (ZWSP + "a") -> Strip ZWSP
         if (currentText.startsWith(ZWSP) && currentText.length > 1) {
-            val realText = currentText.substring(1) // remove ZWSP
+            val realText = currentText.substring(1)
             richTextState.setText(realText)
-            // Updating text will re-trigger this effect, but next time it won't start with ZWSP/match logic
-            lastTextValue = realText 
-            // We want to force a save here of the REAL text
-            onHtmlChange(richTextState.toHtml()) // note: logic loop might need care here. 
-            // Setting text spawns new state. We'll update lastTextValue in next pass or here?
-            // Safer to let the next pass handle the "stable" state recording?
-            // But we need to save now.
+            lastTextValue = realText
             return@LaunchedEffect
         }
-        
+
         // 4. Normal Text Update
         lastTextValue = currentText
         val currentHtml = richTextState.toHtml()
-        // Ensure we don't save ZWSP to the content model
+
         if (currentText == ZWSP) {
-             if (initialHtml.isNotEmpty()) onHtmlChange("")
+            if (initialHtml.isNotEmpty()) onHtmlChange("")
         } else {
-             if (currentHtml != initialHtml) onHtmlChange(currentHtml)
+            if (currentHtml != initialHtml) onHtmlChange(currentHtml)
         }
     }
 }
 
-// ... (Rest of existing helper functions like handleToolbarAction, getParagraphBounds etc.)
-// KEEP EXISTING HELPER FUNCTIONS HERE
+// ---------------------------------------------------------
+// HELPER FUNCTIONS
+// ---------------------------------------------------------
+
 private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextState) {
     when (type) {
         SpanType.BOLD -> state.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold))
@@ -924,23 +892,11 @@ private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextS
                 state.addLink(text = selectedText, url = value)
             }
         }
-        // Checkbox is now handled via mode switching, but we keep this for legacy or mixed text support
-        SpanType.CHECKBOX -> { /* Handled in lambda now */ }
+        SpanType.CHECKBOX -> { /* Handled via ViewModel state logic */ }
         SpanType.TEXT_COLOR -> value?.toLongOrNull()?.let { state.toggleSpanStyle(SpanStyle(color = Color(it.toULong()))) }
         SpanType.BG_COLOR -> value?.toLongOrNull()?.let { state.toggleSpanStyle(SpanStyle(background = Color(it.toULong()))) }
         SpanType.FONT_SIZE -> value?.toFloatOrNull()?.let { state.toggleSpanStyle(SpanStyle(fontSize = it.sp)) }
     }
-}
-
-private fun getParagraphBounds(state: RichTextState): Pair<Int, Int> {
-    val text = state.annotatedString.text
-    val selection = state.selection
-    val cursor = selection.min
-    val paragraph = state.annotatedString.paragraphStyles.firstOrNull { style -> cursor >= style.start && cursor <= style.end }
-    if (paragraph != null) return paragraph.start to paragraph.end
-    val start = text.lastIndexOf('\n', cursor - 1).let { if (it == -1) 0 else it + 1 }
-    val end = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
-    return start to end
 }
 
 private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
@@ -960,18 +916,4 @@ private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
     if (currentSpan.color != Color.Unspecified) viewModel.activeStyles[SpanType.TEXT_COLOR] = currentSpan.color.value.toString()
     if (currentSpan.background != Color.Unspecified) viewModel.activeStyles[SpanType.BG_COLOR] = currentSpan.background.value.toString()
     if (currentSpan.fontSize != TextUnit.Unspecified) viewModel.activeStyles[SpanType.FONT_SIZE] = currentSpan.fontSize.value.toString()
-}
-
-private fun updateRichTextState(state: RichTextState, content: AnnotatedString, selection: androidx.compose.ui.text.TextRange) {
-    // Keep existing reflection hacks if needed
-    val newValue = TextFieldValue(content, selection)
-    try {
-        val field = state::class.java.getDeclaredField("_textFieldValue")
-        field.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        val mutableState = field.get(state) as androidx.compose.runtime.MutableState<TextFieldValue>
-        mutableState.value = newValue
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
 }
