@@ -730,7 +730,7 @@ private fun HybridRowItem(
         // --- Marker Column (Checkbox / Bullet) ---
         Box(
             modifier = Modifier
-                .padding(top = 2.dp, end = 8.dp)
+                .padding(top = 0.dp, end = 8.dp)
                 .size(24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -782,6 +782,7 @@ private fun HybridRowItem(
                 enabled = isCardFocused,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = 2.dp)
                     .focusRequester(focusRequester)
                     .onFocusChanged { focusState ->
                         isLocallyFocused = focusState.isFocused
