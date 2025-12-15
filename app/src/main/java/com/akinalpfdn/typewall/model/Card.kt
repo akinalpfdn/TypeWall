@@ -7,6 +7,7 @@ data class Card(
     var x: Float,
     var y: Float,
     var width: Float,
+    var height: Float = 0f, // Added height for hit-testing
     var content: String,
     var title: String = "",
     var spans: List<CardSpan>? = emptyList(),
@@ -35,3 +36,9 @@ enum class SpanType {
     ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT,
     QUOTE, CODE, LINK, CHECKBOX
 }
+
+data class Connection(
+    val id: String = UUID.randomUUID().toString(),
+    val startCardId: String,
+    val endCardId: String
+)

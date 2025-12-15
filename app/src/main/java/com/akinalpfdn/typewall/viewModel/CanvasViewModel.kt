@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.akinalpfdn.typewall.model.Card
 import com.akinalpfdn.typewall.model.CardSpan
+import com.akinalpfdn.typewall.model.Connection
 import com.akinalpfdn.typewall.model.SpanType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -34,6 +35,13 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
     // Callback to change the active card's background color
     var onApplyCardColor: ((Long) -> Unit)? by mutableStateOf(null)
 
+    // Connections State
+    private val _connections = mutableStateListOf<Connection>()
+    val connections: List<Connection> get() = _connections
+
+    var isConnectionMode by mutableStateOf(false)
+    var connectionStartCardId by mutableStateOf<String?>(null)
+
     // World Y coordinate of the last focus event (tap/long press)
     var focusPointY by mutableStateOf<Float?>(null)
 
@@ -42,6 +50,7 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         loadCards()
+        loadConnections()
     }
     // --- Card-Based History Management ---
     // Map<CardId, Stack<CardState>>
@@ -236,6 +245,60 @@ class CanvasViewModel(application: Application) : AndroidViewModel(application) 
         } catch (e: Exception) {
             e.printStackTrace()
             false
+        }
+    }
+
+
+    // --- Connection Logic (Click-to-Connect) ---
+
+    fun toggleConnectionMode() {
+        isConnectionMode = !isConnectionMode
+        connectionStartCardId = null
+    }
+
+    fun handleCardTap(cardId: String) {
+        if (!isConnectionMode) return
+
+        val startId = connectionStartCardId
+        if (startId == null) {
+            // Select first card
+            connectionStartCardId = cardId
+        } else if (startId == cardId) {
+            // Deselect if same card tapped
+            connectionStartCardId = null
+        } else {
+            // Second card tapped -> Toggle Connection
+            val existingIndex = _connections.indexOfFirst {
+                (it.startCardId == startId && it.endCardId == cardId) ||
+                (it.startCardId == cardId && it.endCardId == startId)
+            }
+
+            if (existingIndex != -1) {
+                _connections.removeAt(existingIndex)
+            } else {
+                _connections.add(Connection(startCardId = startId, endCardId = cardId))
+            }
+            saveConnections()
+            
+            // Chain: This card becomes the new start
+            connectionStartCardId = cardId
+        }
+    }
+
+    private fun saveConnections() {
+        val json = gson.toJson(_connections)
+        prefs.edit().putString("connections_data", json).apply()
+    }
+
+    private fun loadConnections() {
+        val json = prefs.getString("connections_data", null)
+        if (json != null) {
+            try {
+                val type = object : TypeToken<List<Connection>>() {}.type
+                val saved: List<Connection> = gson.fromJson(json, type)
+                _connections.clear()
+                _connections.addAll(saved)
+            } catch (e: Exception) { }
         }
     }
 }

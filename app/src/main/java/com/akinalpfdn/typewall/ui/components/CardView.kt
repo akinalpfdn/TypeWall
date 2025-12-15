@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.akinalpfdn.typewall.model.Card
 import com.akinalpfdn.typewall.model.SpanType
 import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
@@ -123,6 +124,11 @@ fun CardView(
     val displayBgColor = if (isGhost) Color.Transparent else cardBgColor
     val borderColor = if (isGhost) Color.Transparent else MaterialTheme.colorScheme.outlineVariant
     val shadowElevation = if (isGhost) 0.dp else if (isFocused) 8.dp else 2.dp
+    
+    // Connection Mode Logic
+    val isSelectedForConnection = viewModel.isConnectionMode && viewModel.connectionStartCardId == card.id
+    val effectiveBorderColor = if (isSelectedForConnection) MaterialTheme.colorScheme.primary else borderColor
+    val effectiveBorderWidth = if (isSelectedForConnection) 3.dp else 1.dp
 
     // Auto-focus new cards
     LaunchedEffect(Unit) {
@@ -140,8 +146,25 @@ fun CardView(
             .wrapContentHeight(Alignment.Top, unbounded = true)
             .shadow(shadowElevation, RoundedCornerShape(8.dp))
             .background(displayBgColor, RoundedCornerShape(8.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .shadow(shadowElevation, RoundedCornerShape(8.dp))
+            .background(displayBgColor, RoundedCornerShape(8.dp))
+            .border(effectiveBorderWidth, effectiveBorderColor, RoundedCornerShape(8.dp))
     ) {
+        // --- Click-to-Connect Interceptor ---
+        if (viewModel.isConnectionMode) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .zIndex(100f)
+                    .background(Color.Transparent)
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            viewModel.handleCardTap(card.id)
+                        }
+                    }
+            )
+        }
+        
         Column {
             // --- Header Section ---
             Box(

@@ -34,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akinalpfdn.typewall.data.AppTheme
 import com.akinalpfdn.typewall.data.ThemePreferences
 import com.akinalpfdn.typewall.model.SpanType
+import com.akinalpfdn.typewall.model.Connection
 import com.akinalpfdn.typewall.ui.components.*
 import com.akinalpfdn.typewall.viewmodel.CanvasViewModel
 import kotlinx.coroutines.launch
@@ -200,7 +201,42 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     }
             )
 
-            // 2. Cards Layer
+            // 2. Connections Layer (Behind Cards)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = viewModel.scale,
+                        scaleY = viewModel.scale,
+                        translationX = viewModel.offsetX,
+                        translationY = viewModel.offsetY,
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    )
+            ) {
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    viewModel.connections.forEach { conn ->
+                        val startVal = viewModel.cards.find { it.id == conn.startCardId }
+                        val endVal = viewModel.cards.find { it.id == conn.endCardId }
+                        if (startVal != null && endVal != null) {
+                            val startW = startVal.width * density
+                            val startH = startVal.height * density
+                            val endW = endVal.width * density
+                            val endH = endVal.height * density
+                            
+                            val startCenter = androidx.compose.ui.geometry.Offset(startVal.x + startW / 2, startVal.y + startH / 2)
+                            val endCenter = androidx.compose.ui.geometry.Offset(endVal.x + endW / 2, endVal.y + endH / 2)
+                            drawLine(
+                                color = androidx.compose.ui.graphics.Color.Gray,
+                                start = startCenter,
+                                end = endCenter,
+                                strokeWidth = 2.dp.toPx()
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // 3. Cards Layer
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -285,6 +321,25 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                     },
                     "Toggle Theme",
                     tint = MaterialTheme.colorScheme.onSurface
+                )
+                
+            }
+
+            // Connection Toggle Button
+            IconButton(
+                onClick = { viewModel.toggleConnectionMode() },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp, 152.dp)
+                    .background(
+                        if (viewModel.isConnectionMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f), 
+                        CircleShape
+                    )
+            ) {
+                Icon(
+                    Icons.Default.Link,
+                    "Toggle Connections",
+                    tint = if (viewModel.isConnectionMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
             }
 
