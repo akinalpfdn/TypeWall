@@ -140,12 +140,12 @@ fun CanvasScreen(viewModel: CanvasViewModel = viewModel()) {
                                 title = "Text Color",
                                 onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.TEXT_COLOR, color.value.toString()) },
                                 onBack = { toolbarMode = ToolbarMode.MAIN }
-                            )
+                            )/*
                             ToolbarMode.BG_COLOR -> ColorPalette(
                                 title = "Highlight Color",
                                 onSelect = { color -> viewModel.onApplyStyle?.invoke(SpanType.BG_COLOR, color.value.toString()) },
                                 onBack = { toolbarMode = ToolbarMode.MAIN }
-                            )
+                            )*/
                             ToolbarMode.CARD_COLOR -> ColorPalette(
                                 title = "Card Color",
                                 onSelect = { color -> viewModel.onApplyCardColor?.invoke(color.value.toLong()) },

@@ -38,7 +38,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
 
 // Enum to track which toolbar sub-menu is open
-enum class ToolbarMode { MAIN, TEXT_COLOR, BG_COLOR, CARD_COLOR }
+enum class ToolbarMode { MAIN, TEXT_COLOR, //BG_COLOR,
+    CARD_COLOR }
 
 
 @Composable
@@ -78,7 +79,7 @@ fun MainToolbar(
 
         // --- Color & Size Group ---
         ToolbarIcon(Icons.Default.FormatColorText, false) { onOpenMode(ToolbarMode.TEXT_COLOR) }
-        ToolbarIcon(Icons.Default.FormatColorFill, false) { onOpenMode(ToolbarMode.BG_COLOR) }
+                // ToolbarIcon(Icons.Default.FormatColorFill, false) { onOpenMode(ToolbarMode.BG_COLOR) }
 
         ToolbarIcon(Icons.Default.Palette, false) { onOpenMode(ToolbarMode.CARD_COLOR) }
         // Font Size Wheel Picker

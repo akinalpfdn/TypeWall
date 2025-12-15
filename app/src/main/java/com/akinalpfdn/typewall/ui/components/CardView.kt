@@ -905,7 +905,7 @@ private fun handleToolbarAction(type: SpanType, value: String?, state: RichTextS
         }
         SpanType.CHECKBOX -> { /* Handled via ViewModel state logic */ }
         SpanType.TEXT_COLOR -> value?.toIntOrNull()?.let { state.toggleSpanStyle(SpanStyle(color = Color(it))) }
-        SpanType.BG_COLOR -> value?.toIntOrNull()?.let { state.toggleSpanStyle(SpanStyle(background = Color(it))) }
+        //SpanType.BG_COLOR -> value?.toIntOrNull()?.let { state.toggleBackgroundColor(Color(it)) } DONT DELETE
         SpanType.FONT_SIZE -> value?.toFloatOrNull()?.let { state.toggleSpanStyle(SpanStyle(fontSize = it.sp)) }
     }
 }
@@ -925,6 +925,6 @@ private fun syncToolbarState(viewModel: CanvasViewModel, state: RichTextState) {
         else -> {}
     }
     if (currentSpan.color != Color.Unspecified) viewModel.activeStyles[SpanType.TEXT_COLOR] = currentSpan.color.value.toString()
-    if (currentSpan.background != Color.Unspecified) viewModel.activeStyles[SpanType.BG_COLOR] = currentSpan.background.value.toString()
+    //if (currentSpan.background != Color.Unspecified) viewModel.activeStyles[SpanType.BG_COLOR] = currentSpan.background.value.toString()
     if (currentSpan.fontSize != TextUnit.Unspecified) viewModel.activeStyles[SpanType.FONT_SIZE] = currentSpan.fontSize.value.toString()
 }
