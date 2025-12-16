@@ -83,8 +83,9 @@ fun CardView(
     }
 
     // Sync content changes to ViewModel (Only for RichText Mode)
-    LaunchedEffect(card.content) {
-        if (!isChecklistMode && richTextState.toHtml() != card.content) {
+    // Sync content changes to ViewModel (Only for RichText Mode)
+    LaunchedEffect(card.content, isFocused) {
+        if (!isChecklistMode && !isFocused && richTextState.toHtml() != card.content) {
             richTextState.setHtml(card.content)
         }
     }
